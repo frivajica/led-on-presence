@@ -29,10 +29,6 @@ bool isLightOn() {
   return lightIsOn;
 }
 
-void toggleLight() {
-  lightIsOn = !lightIsOn;
-}
-
 void setModeLed(bool on) {
   digitalWrite(PIN_MODE_LED, on ? HIGH : LOW);
 }

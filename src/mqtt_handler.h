@@ -5,10 +5,8 @@
 
 void mqttSetup();
 void mqttLoop();
-void mqttPublishPresence(bool detected, int distanceCm);
-void mqttPublishLight(bool on, uint8_t brightness);
-void mqttPublishGas(uint16_t level, bool alarm);
-void mqttPublishPot(int value);
-void mqttPublishTemperature(float celsius, float humidity);
+void mqttPublishAll(bool presence, int distanceCm, bool lightOn, uint8_t brightness,
+                    uint16_t gasLevel, bool gasAlarm, int potValue,
+                    float temperature, float humidity);
 
 #endif

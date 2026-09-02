@@ -103,35 +103,27 @@ void mqttLoop() {
   }
 }
 
-void mqttPublishPresence(bool detected, int distanceCm) {
+void mqttPublishAll(bool presence, int distanceCm, bool lightOn, uint8_t brightness,
+                    uint16_t gasLevel, bool gasAlarm, int potValue,
+                    float temperature, float humidity) {
   if (!mqtt.connected()) return;
-  mqtt.publish(topicFor("binary_sensor/presence/state").c_str(), detected ? "ON" : "OFF", true);
+
+  mqtt.publish(topicFor("binary_sensor/presence/state").c_str(), presence ? "ON" : "OFF", true);
   mqtt.publish(topicFor("sensor/radar_distance/state").c_str(), String(distanceCm).c_str(), true);
-}
 
-void mqttPublishLight(bool on, uint8_t brightness) {
-  if (!mqtt.connected()) return;
-  JsonDocument doc;
-  doc["state"] = on ? "ON" : "OFF";
-  doc["brightness"] = brightness;
-  char buf[64];
-  serializeJson(doc, buf, sizeof(buf));
-  mqtt.publish(topicFor("light/state").c_str(), buf, true);
-}
+  JsonDocument lightDoc;
+  lightDoc["state"] = lightOn ? "ON" : "OFF";
+  lightDoc["brightness"] = brightness;
+  char lightBuf[64];
+  serializeJson(lightDoc, lightBuf, sizeof(lightBuf));
+  mqtt.publish(topicFor("light/state").c_str(), lightBuf, true);
 
-void mqttPublishGas(uint16_t level, bool alarm) {
-  if (!mqtt.connected()) return;
-  mqtt.publish(topicFor("sensor/gas_level/state").c_str(), String(level).c_str(), true);
-  mqtt.publish(topicFor("binary_sensor/gas_detected/state").c_str(), alarm ? "ON" : "OFF", true);
-}
+  mqtt.publish(topicFor("sensor/gas_level/state").c_str(), String(gasLevel).c_str(), true);
+  mqtt.publish(topicFor("binary_sensor/gas_detected/state").c_str(), gasAlarm ? "ON" : "OFF", true);
+  mqtt.publish(topicFor("sensor/brightness_pot/state").c_str(), String(potValue).c_str(), true);
 
-void mqttPublishPot(int value) {
-  if (!mqtt.connected()) return;
-  mqtt.publish(topicFor("sensor/brightness_pot/state").c_str(), String(value).c_str(), true);
-}
-
-void mqttPublishTemperature(float celsius, float humidity) {
-  if (!mqtt.connected()) return;
-  mqtt.publish(topicFor("sensor/temperature/state").c_str(), String(celsius, 1).c_str(), true);
-  mqtt.publish(topicFor("sensor/humidity/state").c_str(), String(humidity, 1).c_str(), true);
+  if (!isnan(temperature) && !isnan(humidity)) {
+    mqtt.publish(topicFor("sensor/temperature/state").c_str(), String(temperature, 1).c_str(), true);
+    mqtt.publish(topicFor("sensor/humidity/state").c_str(), String(humidity, 1).c_str(), true);
+  }
 }

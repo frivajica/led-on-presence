@@ -167,15 +167,10 @@ void loop() {
   static unsigned long lastMqttPublish = 0;
   if (millis() - lastMqttPublish > 2000) {
     lastMqttPublish = millis();
-    mqttPublishPresence(presence, radarDetectedDistance());
-    mqttPublishLight(isLightOn(), currentBrightness);
-    mqttPublishGas(gasReadAnalog(), gasIsAlarm());
-    mqttPublishPot(potValue);
-    if (temperatureIsValid()) {
-      mqttPublishTemperature(temperatureGetCelsius(), temperatureGetHumidity());
-    }
+    mqttPublishAll(presence, radarDetectedDistance(), isLightOn(), currentBrightness,
+                   gasReadAnalog(), gasIsAlarm(), potValue,
+                   temperatureGetCelsius(), temperatureGetHumidity());
   }
 
   printStatus(potValue, presence);
-  delay(20);
 }

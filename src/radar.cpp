@@ -51,6 +51,7 @@ void setupRadar() {
 
   if (!radarNeedsConfig()) {
     Serial.println(F("Radar: config OK"));
+    radar.autoReadTask();
     return;
   }
 
@@ -60,6 +61,7 @@ void setupRadar() {
   }
   if (!radar.setMaxValues(RADAR_MAX_GATE, RADAR_MAX_GATE, RADAR_IDLE_TIME)) ok = false;
   Serial.println(ok ? F("Radar: configured") : F("Radar: config FAIL"));
+  if (ok) radar.autoReadTask();
 }
 
 bool radarPresenceDetected() {

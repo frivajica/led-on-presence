@@ -4,6 +4,7 @@
 static bool lastButtonState = HIGH;
 static bool lastStableState = HIGH;
 static unsigned long lastDebounceTime = 0;
+static int lastPotValue = 0;
 
 void setupInputs() {
   analogReadResolution(10);  // ESP32 defaults to 12-bit; use 10-bit to match Arduino Uno range (0-1023)
@@ -13,7 +14,12 @@ void setupInputs() {
 }
 
 int readPotentiometer() {
-  return analogRead(PIN_POTENTIOMETER);
+  lastPotValue = analogRead(PIN_POTENTIOMETER);
+  return lastPotValue;
+}
+
+int getPotValue() {
+  return lastPotValue;
 }
 
 bool readButton() {
