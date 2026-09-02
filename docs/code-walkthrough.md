@@ -4,15 +4,20 @@
 
 ```
 led-on-presence/
-├── platformio.ini          # Build configuration (board, framework)
+├── platformio.ini              # Build config + libraries
 ├── include/
-│   └── config.h            # Pin definitions and constants
+│   ├── config.h                # Pin definitions and constants
+│   └── secrets.h               # WiFi/MQTT credentials (gitignored)
 ├── src/
-│   ├── main.cpp            # Entry point — setup() and loop()
-│   ├── inputs.h / .cpp     # Read sensors and buttons
-│   ├── outputs.h / .cpp    # Control MOSFET and LED
-│   └── radar.h / .cpp      # LD2410C radar communication
-└── docs/                   # This documentation
+│   ├── main.cpp                # Entry point — setup, loop, state machine
+│   ├── inputs.h / .cpp         # Read potentiometer and button
+│   ├── outputs.h / .cpp        # Control MOSFET (PWM), mode LED, light state
+│   ├── radar.h / .cpp          # LD2410C radar communication and config
+│   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
+│   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
+│   ├── gas_sensor.h / .cpp     # Steren ARD-352 gas sensor reading
+│   └── web_server.h / .cpp     # Minimal web UI for debugging
+└── docs/                       # This documentation
 ```
 
 ---
@@ -367,6 +372,80 @@ if (millis() - lastPrint > 500) {
 ```
 
 Prints debug info every 500ms (not every loop, which would flood the serial monitor). The `static` variable `lastPrint` tracks when we last printed.
+
+---
+
+## `src/wifi_manager.cpp` — WiFi Connection
+
+```cpp
+void wifiSetup() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  // ... waits up to 10s for connection
+}
+
+void wifiLoop() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (millis() - lastReconnectAttempt > 5000) {
+    WiFi.reconnect();
+  }
+}
+```
+
+Non-blocking WiFi with 10-second timeout on boot. If WiFi fails, the device continues working locally (gas sensor, radar, light all work offline). Reconnection attempts every 5 seconds in the background.
+
+---
+
+## `src/mqtt_handler.cpp` — Home Assistant Integration
+
+### Auto-Discovery
+
+When MQTT connects, the device publishes JSON config messages to `homeassistant/` topics. Home Assistant sees these and automatically creates entities (light, sensors, binary sensors). No manual YAML config needed on the HA side.
+
+### State Publishing
+
+Every 2 seconds, the device publishes:
+- Presence state (ON/OFF)
+- Light state (ON/OFF + brightness)
+- Gas level + alarm
+- Potentiometer value
+- Radar distance
+
+### Command Subscription
+
+Subscribes to `led-on-presence/config/gas_threshold/set` — when HA sends a number, the device stores it in flash (ESP32 Preferences library) and uses it as the new alarm threshold.
+
+### Graceful Degradation
+
+If MQTT broker is unreachable, the device continues without Home Assistant integration. All local functionality (radar, gas, light, button, pot, web UI) works independently.
+
+---
+
+## `src/gas_sensor.cpp` — Steren ARD-352 / MQ-2
+
+```cpp
+void setupGasSensor() {
+  pinMode(PIN_GAS_DIGITAL, INPUT);
+  prefs.begin("gas", false);
+  uint16_t stored = prefs.getUShort("threshold", 0);
+  if (stored > 0) alarmThreshold = stored;
+}
+```
+
+Reads both the digital pin (instant alarm) and analog pin (concentration level). The alarm threshold is persisted to flash via ESP32's Preferences library — survives reboots and can be updated via MQTT.
+
+**Warmup note:** The MQ-2 heater needs 20–48 hours on first use for stable readings. The first few readings will be high and gradually settle.
+
+---
+
+## `src/web_server.cpp` — Debug Web UI
+
+Serves a minimal HTML page at `http://<esp32-ip>` with:
+- Live sensor values (presence, gas, brightness, distance)
+- Light toggle button
+- Auto-refreshes every second
+
+Also exposes `GET /api/status` (JSON) and `POST /api/toggle` for programmatic access.
 
 ---
 

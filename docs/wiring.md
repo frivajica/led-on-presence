@@ -156,7 +156,36 @@ The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationa
 
 ---
 
-## Step 5: Button → ESP32
+## Step 5: Gas Sensor (Steren ARD-352) → ESP32
+
+The gas sensor has 4 pins: VCC, GND, DO (digital), AO (analog).
+
+```
+    Steren ARD-352 Gas Sensor
+    ┌──────────────┐
+    │   ○  ○  ○  ○ │
+    │  VCC DO AO GND│
+    └──────────────┘
+         │   │   │
+         │   │   └──→ ESP32 GPIO 32 (analog, ADC1)
+         │   └──────→ ESP32 GPIO 14 (digital input)
+         └──────────→ 5V (from LM2596, NOT 3.3V — heater needs 5V)
+```
+
+| Sensor Pin | Connects To | Notes |
+|------------|-----------|-------|
+| VCC | 5V (from LM2596 output or USB) | Heater requires 5V — do NOT use 3.3V |
+| GND | Common GND | |
+| DO | ESP32 GPIO 14 | Digital: LOW when gas detected, HIGH when clear |
+| AO | ESP32 GPIO 32 | Analog: voltage proportional to gas concentration |
+
+**Important:** The gas sensor's VCC must come from the 5V rail (LM2596 output), not the 3.3V rail. The internal heater needs 5V to function.
+
+**Warmup:** On first power-up, wait at least 20 seconds before taking readings. For accurate calibration, leave powered for 24–48 hours. Subsequent power-cycles need ~2 minutes warmup.
+
+---
+
+## Step 6: Button → ESP32
 
 ```
     ┌─────────┐
@@ -179,7 +208,7 @@ The button connects the two legs when pressed. We use `INPUT_PULLUP` in code, so
 
 ---
 
-## Step 6: LED Strip → 24V Circuit
+## Step 7: LED Strip → 24V Circuit
 
 This is where you switch the high voltage. **Keep these wires away from the ESP32 side wires.**
 
@@ -209,7 +238,7 @@ When the MOSFET is ON (Gate = HIGH), current flows from 24V+ through the LED str
 
 ---
 
-## Step 7: Common Ground
+## Step 8: Common Ground
 
 This is the most critical connection. **All grounds must be connected:**
 
@@ -318,9 +347,10 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 7. ✅ Potentiometer wired correctly (3.3V, GPIO 34, GND)
 8. ✅ LD2410C wired correctly (3V3, GPIO 16, GPIO 17 — direct, no voltage divider!)
 9. ✅ Button wired correctly (GPIO 27, GND)
-10. ✅ No wire crosses between ESP32 side and 24V side
-11. ✅ 24V supply is UNPLUGGED from wall outlet
-12. ✅ USB is DISCONNECTED (using LM2596 for power)
+10. ✅ Gas sensor wired correctly (5V from LM2596, GPIO 14, GPIO 32, GND)
+11. ✅ No wire crosses between ESP32 side and 24V side
+12. ✅ 24V supply is UNPLUGGED from wall outlet
+13. ✅ USB is DISCONNECTED (using LM2596 for power)
 
 ---
 

@@ -194,6 +194,50 @@ Button leg 2 → GND
 
 ---
 
+## Steren ARD-352 Gas Sensor (MQ-2)
+
+**What it is:** A smoke and flammable gas sensor based on the MQ-2 semiconductor. Detects LPG, smoke, alcohol, propane, hydrogen, methane, and carbon monoxide.
+
+**Why ARD-352:** Inexpensive, widely available (Steren), analog + digital output, works with 5V.
+
+**Key specs:**
+- **Detection gases:** LPG, smoke, alcohol, propane, hydrogen, methane, CO
+- **Operating voltage:** 5V (heater requires 5V — do NOT power from 3.3V)
+- **Output:** Analog (0–5V proportional to concentration) + Digital (LOW when gas detected)
+- **Warmup time:** ~20 seconds for readable values, 48 hours for full calibration
+
+**How it works:**
+1. Internal heater heats a tin dioxide (SnO₂) semiconductor
+2. In clean air, conductivity is low → high resistance → low voltage output
+3. When gas is present, conductivity increases → resistance drops → voltage rises
+4. The ESP32 reads this voltage via `analogRead()` on the analog pin
+5. The digital pin goes LOW when concentration exceeds the onboard potentiometer threshold
+
+**Pinout:**
+
+```
+    ARD-352 Module
+    ┌──────────────┐
+    │   ○  ○  ○  ○ │
+    │  VCC DO AO GND│
+    └──────────────┘
+```
+
+| Pin | Connects To | Notes |
+|-----|------------|-------|
+| VCC | 5V (from LM2596) | Heater needs 5V — NOT 3.3V |
+| GND | Common GND | |
+| DO | ESP32 GPIO 14 | Digital: LOW = gas detected |
+| AO | ESP32 GPIO 32 | Analog: voltage ∝ concentration |
+
+**Important notes:**
+- First-time warmup takes 24–48 hours for the heater to stabilize. Readings will be high initially.
+- After warmup, power-cycle warmup is ~2 minutes.
+- The onboard potentiometer adjusts the digital output sensitivity threshold (not the analog range).
+- The alarm threshold in firmware is configurable via MQTT from Home Assistant.
+
+---
+
 ## Summary: The Signal Chain
 
 ```
