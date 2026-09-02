@@ -38,17 +38,19 @@ static void fadeStart(uint8_t target) {
 
 static void fadeUpdate() {
   if (!fading) return;
-  if (FADE_DURATION_MS == 0) {
+  int distance = abs((int)targetBrightness - (int)fadeStartBrightness);
+  if (FADE_STEPS_PER_SEC == 0 || distance == 0) {
     currentBrightness = targetBrightness;
     fading = false;
     return;
   }
+  unsigned long duration = (unsigned long)distance * 1000UL / FADE_STEPS_PER_SEC;
   unsigned long elapsed = millis() - fadeStartTime;
-  if (elapsed >= FADE_DURATION_MS) {
+  if (elapsed >= duration) {
     currentBrightness = targetBrightness;
     fading = false;
   } else {
-    float progress = (float)elapsed / FADE_DURATION_MS;
+    float progress = (float)elapsed / duration;
     currentBrightness = fadeStartBrightness +
         (int)((int)targetBrightness - (int)fadeStartBrightness) * progress;
   }
@@ -71,6 +73,16 @@ static void updateMotionState(int potValue, bool presence) {
 
 static void printStatus(int potValue, bool presence) {
   static unsigned long lastPrint = 0;
+  static unsigned long loopCounter = 0;
+  static unsigned long lastLoopCount = 0;
+  loopCounter++;
+  if (millis() - lastLoopCount >= 1000) {
+    Serial.print(F("Loop: "));
+    Serial.print(loopCounter);
+    Serial.println(F("/s"));
+    loopCounter = 0;
+    lastLoopCount = millis();
+  }
   if (millis() - lastPrint <= 500) return;
   lastPrint = millis();
 

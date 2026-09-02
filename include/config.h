@@ -30,7 +30,7 @@
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 
 // --- PWM ---
-#define FADE_DURATION_MS    500UL  // Brightness fade takes this many milliseconds (0 = instant)
+#define FADE_STEPS_PER_SEC  510UL  // Fade step density (0 = instant). 510 ≈ smooth fade over full 0-255 range.
 
 // --- Modes ---
 enum Mode {
