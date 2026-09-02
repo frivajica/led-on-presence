@@ -18,8 +18,8 @@ static bool radarNeedsConfig() {
     return true;
   }
   for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (radar.motion_sensitivity[gate] != RADAR_GATE_SENSITIVITY ||
-        radar.stationary_sensitivity[gate] != RADAR_GATE_SENSITIVITY) {
+    if (radar.motion_sensitivity[gate] != RADAR_MOTION_SENSITIVITY ||
+        radar.stationary_sensitivity[gate] != RADAR_STATIONARY_SENSITIVITY) {
       return true;
     }
   }
@@ -57,7 +57,7 @@ void setupRadar() {
 
   bool ok = true;
   for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (!radar.setGateSensitivityThreshold(gate, RADAR_GATE_SENSITIVITY, RADAR_GATE_SENSITIVITY)) ok = false;
+    if (!radar.setGateSensitivityThreshold(gate, RADAR_MOTION_SENSITIVITY, RADAR_STATIONARY_SENSITIVITY)) ok = false;
   }
   if (!radar.setMaxValues(RADAR_MAX_GATE, RADAR_MAX_GATE, RADAR_IDLE_TIME)) ok = false;
   Serial.println(ok ? F("Radar: configured") : F("Radar: config FAIL"));
@@ -68,6 +68,12 @@ bool radarPresenceDetected() {
   if (!sensorReady) return false;
   radar.read();
   return radar.presenceDetected();
+}
+
+bool radarMotionDetected() {
+  if (!sensorReady) return false;
+  radar.read();
+  return radar.movingTargetDetected();
 }
 
 int radarDetectedDistance() {

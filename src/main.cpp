@@ -9,13 +9,13 @@
 #include "web_server.h"
 #include <ArduinoOTA.h>
 
-enum MotionState {
-  MOTION_IDLE,
-  MOTION_ACTIVE
+enum PresenceState {
+  PRESENCE_IDLE,
+  PRESENCE_ACTIVE
 };
 
-static Mode currentMode = MODE_MOTION;
-static MotionState motionState = MOTION_IDLE;
+static Mode currentMode = MODE_PRESENCE;
+static PresenceState presenceState = PRESENCE_IDLE;
 static uint8_t currentBrightness = 0;
 static uint8_t targetBrightness = 0;
 static bool lastPresence = false;
@@ -51,17 +51,17 @@ static void fadeUpdate() {
   }
 }
 
-static void updateMotionState(int potValue, bool presence) {
-  if (currentMode != MODE_MOTION) {
+static void updatePresenceState(int potValue, bool presence) {
+  if (currentMode != MODE_PRESENCE) {
     setLightOn(potValue > 5);
-    motionState = MOTION_IDLE;
+    presenceState = PRESENCE_IDLE;
     return;
   }
   if (presence) {
-    motionState = MOTION_ACTIVE;
+    presenceState = PRESENCE_ACTIVE;
     setLightOn(true);
   } else {
-    motionState = MOTION_IDLE;
+    presenceState = PRESENCE_IDLE;
     setLightOn(false);
   }
 }
@@ -95,11 +95,11 @@ static void printStatus(int potValue, bool presence) {
     Serial.print(F("cm"));
   }
   Serial.print(F(" State: "));
-  switch (motionState) {
-    case MOTION_IDLE:
+  switch (presenceState) {
+    case PRESENCE_IDLE:
       Serial.print(F("IDLE"));
       break;
-    case MOTION_ACTIVE:
+    case PRESENCE_ACTIVE:
       Serial.print(F("ACTIVE"));
       break;
   }
@@ -135,7 +135,7 @@ void setup() {
   ArduinoOTA.begin();
 
   Serial.println(F("LED-on-presence started"));
-  Serial.println(F("Mode: MOTION (default)"));
+  Serial.println(F("Mode: PRESENCE (default)"));
 }
 
 void loop() {
@@ -143,7 +143,7 @@ void loop() {
   int potValue = readPotentiometer();
   bool presence = radarPresenceDetected();
 
-  updateMotionState(potValue, presence);
+  updatePresenceState(potValue, presence);
 
   int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
 
@@ -166,10 +166,10 @@ void loop() {
 
   // PRIORITY 2: Inputs (fast, non-blocking)
   if (readButton()) {
-    currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
+    currentMode = (currentMode == MODE_PRESENCE) ? MODE_MANUAL : MODE_PRESENCE;
     lastPresence = presence;
     Serial.print(F("Mode: "));
-    Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
+    Serial.println(currentMode == MODE_PRESENCE ? F("PRESENCE") : F("MANUAL"));
   }
 
   // PRIORITY 3: Network — can block, runs after LED is updated

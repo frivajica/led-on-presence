@@ -3,6 +3,7 @@
 
 void setupRadar();
 bool radarPresenceDetected();
+bool radarMotionDetected();
 int radarDetectedDistance();
 
 #endif

@@ -29,6 +29,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
 <body>
   <h1>LED on Presence</h1>
   <div class="row"><span class="label">Mode</span><span id="mode">-</span></div>
+  <div class="row"><span class="label">Motion</span><span id="motion">-</span></div>
   <div class="row"><span class="label">Presence</span><span id="pres">-</span></div>
   <div class="row"><span class="label">Distance</span><span id="dist">-</span></div>
   <div class="row"><span class="label">Light</span><span id="light">-</span></div>
@@ -44,6 +45,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
       fetch('/api/status').then(r => r.json()).then(d => {
         document.getElementById('mode').textContent = d.mode;
         document.getElementById('mode').className = d.mode === 'MANUAL' ? 'on' : '';
+        document.getElementById('motion').textContent = d.motion ? 'YES' : 'NO';
+        document.getElementById('motion').className = d.motion ? 'on' : 'off';
         document.getElementById('pres').textContent = d.presence ? 'YES' : 'NO';
         document.getElementById('pres').className = d.presence ? 'on' : 'off';
         document.getElementById('dist').textContent = d.presence ? d.distance + ' cm' : '-';
@@ -75,7 +78,8 @@ void webServerSetup() {
 
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *req) {
     JsonDocument doc;
-    doc["mode"] = getMode() == MODE_MOTION ? "MOTION" : "MANUAL";
+    doc["mode"] = getMode() == MODE_PRESENCE ? "PRESENCE" : "MANUAL";
+    doc["motion"] = radarMotionDetected();
     doc["presence"] = radarPresenceDetected();
     doc["distance"] = radarDetectedDistance();
     doc["lightOn"] = isLightOn();

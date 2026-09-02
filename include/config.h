@@ -14,7 +14,8 @@
 #define PIN_RADAR_TX       17   // LD2410C RX ← ESP32 UART2 TX (direct, both 3.3V)
 #define RADAR_BAUD_RATE    256000  // LD2410C factory default
 #define RADAR_MAX_GATE     8    // Detect across full range (~6m)
-#define RADAR_GATE_SENSITIVITY 40  // Energy threshold per gate (lower = more sensitive; 0 disables)
+#define RADAR_MOTION_SENSITIVITY     40  // Movement detection threshold (0-100, lower = more sensitive)
+#define RADAR_STATIONARY_SENSITIVITY 10  // Breathing/still presence threshold (lower = more sensitive)
 #define RADAR_IDLE_TIME    10   // Seconds target must be absent before "no one" reported
 
 // --- Gas Sensor (Steren ARD-352 / MQ-2) ---
@@ -34,8 +35,8 @@
 
 // --- Modes ---
 enum Mode {
-  MODE_MOTION,   // Light triggered by motion sensor, pot sets max brightness
-  MODE_MANUAL    // Pot directly controls brightness, motion ignored
+  MODE_PRESENCE,  // Light triggered by presence sensor, pot sets max brightness
+  MODE_MANUAL     // Pot directly controls brightness, presence ignored
 };
 
 Mode getMode();
