@@ -17,6 +17,11 @@
 #define RADAR_GATE_SENSITIVITY 10  // Energy threshold per gate (lower = more sensitive; 0 disables)
 #define RADAR_IDLE_TIME    10   // Seconds target must be absent before "no one" reported
 
+// --- Gas Sensor (Steren ARD-352 / MQ-2) ---
+#define PIN_GAS_DIGITAL    14   // Digital output: LOW = gas detected
+#define PIN_GAS_ANALOG     32   // Analog output: voltage proportional to concentration
+#define GAS_THRESHOLD_DEFAULT 400  // Default alarm threshold (0-4095); overridable via MQTT
+
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 

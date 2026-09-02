@@ -2,6 +2,11 @@
 #include "inputs.h"
 #include "outputs.h"
 #include "radar.h"
+#include "wifi_manager.h"
+#include "mqtt_handler.h"
+#include "gas_sensor.h"
+#include "web_server.h"
+#include <ArduinoOTA.h>
 
 enum MotionState {
   MOTION_IDLE,
@@ -13,13 +18,12 @@ static Mode currentMode = MODE_MOTION;
 static MotionState motionState = MOTION_IDLE;
 static uint8_t currentBrightness = 0;
 static uint8_t targetBrightness = 0;
-static bool lightOn = false;
 static unsigned long lastMotionTime = 0;
 static unsigned long cooldownStartTime = 0;
 
 static void updateMotionState(int potValue, bool presence) {
   if (currentMode != MODE_MOTION) {
-    lightOn = potValue > 5;
+    setLightOn(potValue > 5);
     motionState = MOTION_IDLE;
     return;
   }
@@ -27,7 +31,7 @@ static void updateMotionState(int potValue, bool presence) {
     case MOTION_IDLE:
       if (presence) {
         motionState = MOTION_ACTIVE;
-        lightOn = true;
+        setLightOn(true);
         lastMotionTime = millis();
       }
       break;
@@ -38,7 +42,7 @@ static void updateMotionState(int potValue, bool presence) {
       if (millis() - lastMotionTime > MOTION_TIMEOUT_MS) {
         motionState = MOTION_COOLDOWN;
         cooldownStartTime = millis();
-        lightOn = false;
+        setLightOn(false);
       }
       break;
     case MOTION_COOLDOWN:
@@ -99,7 +103,12 @@ static void printStatus(int potValue, bool presence) {
     }
   }
   Serial.print(F(" Light: "));
-  Serial.println(lightOn ? F("ON") : F("OFF"));
+  Serial.print(isLightOn() ? F("ON") : F("OFF"));
+  uint16_t gasLevel = gasReadAnalog();
+  Serial.print(F(" Gas: "));
+  Serial.print(gasLevel);
+  if (gasIsAlarm()) Serial.print(F(" ALARM"));
+  Serial.println();
 }
 
 void setup() {
@@ -107,12 +116,24 @@ void setup() {
   setupInputs();
   setupOutputs();
   setupRadar();
+  setupGasSensor();
+
+  wifiSetup();
+  mqttSetup();
+  webServerSetup();
+
+  ArduinoOTA.setHostname("led-on-presence");
+  ArduinoOTA.begin();
 
   Serial.println(F("LED-on-presence started"));
   Serial.println(F("Mode: MOTION (default)"));
 }
 
 void loop() {
+  ArduinoOTA.handle();
+  wifiLoop();
+  mqttLoop();
+
   if (readButton()) {
     currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
     Serial.print(F("Mode: "));
@@ -124,7 +145,7 @@ void loop() {
 
   updateMotionState(potValue, presence);
 
-  if (lightOn) {
+  if (isLightOn()) {
     fadeToward(map(potValue, 0, 1023, 255, 0));
   } else {
     fadeToward(0);
@@ -132,6 +153,15 @@ void loop() {
 
   setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
+
+  static unsigned long lastMqttPublish = 0;
+  if (millis() - lastMqttPublish > 2000) {
+    lastMqttPublish = millis();
+    mqttPublishPresence(presence, radarDetectedDistance());
+    mqttPublishLight(isLightOn(), currentBrightness);
+    mqttPublishGas(gasReadAnalog(), gasIsAlarm());
+    mqttPublishPot(potValue);
+  }
 
   printStatus(potValue, presence);
   delay(20);
