@@ -65,18 +65,21 @@ void setupRadar() {
 }
 
 bool radarPresenceDetected() {
-  if (!sensorReady) return false;
-  radar.read();
+  if (!sensorReady || !radar.isConnected()) return false;
   return radar.presenceDetected();
 }
 
 bool radarMotionDetected() {
-  if (!sensorReady) return false;
-  radar.read();
+  if (!sensorReady || !radar.isConnected()) return false;
   return radar.movingTargetDetected();
 }
 
+bool radarIsConnected() {
+  if (!sensorReady) return false;
+  return radar.isConnected();
+}
+
 int radarDetectedDistance() {
-  if (!sensorReady) return 0;
+  if (!sensorReady || !radar.isConnected()) return 0;
   return radar.detectionDistance();
 }

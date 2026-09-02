@@ -4,6 +4,7 @@
 void setupRadar();
 bool radarPresenceDetected();
 bool radarMotionDetected();
+bool radarIsConnected();
 int radarDetectedDistance();
 
 #endif
