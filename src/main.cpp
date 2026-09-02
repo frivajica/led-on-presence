@@ -18,6 +18,7 @@ static Mode currentMode = MODE_MOTION;
 static MotionState motionState = MOTION_IDLE;
 static uint8_t currentBrightness = 0;
 static uint8_t targetBrightness = 0;
+static bool lastPresence = false;
 
 static uint8_t fadeStartBrightness = 0;
 static unsigned long fadeStartTime = 0;
@@ -139,10 +140,16 @@ void loop() {
 
   int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
 
-  if (abs((int)target - (int)targetBrightness) > 2) {
+  if (presence != lastPresence) {
     fadeStart(target);
+  } else if ((int)target != (int)targetBrightness) {
+    currentBrightness = target;
+    targetBrightness = target;
+    fading = false;
   }
+
   fadeUpdate();
+  lastPresence = presence;
 
   setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
@@ -150,6 +157,7 @@ void loop() {
   // PRIORITY 2: Inputs (fast, non-blocking)
   if (readButton()) {
     currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
+    lastPresence = presence;
     Serial.print(F("Mode: "));
     Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
   }
