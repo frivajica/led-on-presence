@@ -238,6 +238,52 @@ Button leg 2 → GND
 
 ---
 
+## Steren ARD-360 Temperature & Humidity Sensor (DHT11)
+
+**What it is:** A digital temperature and humidity sensor based on the DHT11. Measures ambient room conditions.
+
+**Why ARD-360:** Inexpensive, available at Steren stores, works from 3.3V, one-pin digital interface.
+
+**Key specs:**
+- **Supply voltage:** 3.3–5.5V (works from ESP32's 3.3V rail)
+- **Temperature range:** 0–50°C
+- **Humidity range:** 20–90% RH
+- **Resolution:** 1°C / 1% RH
+- **Tolerance:** ±2°C / ±5% RH
+- **Read rate:** Max once per 2 seconds (firmware reads every 10s)
+
+**How it works:**
+1. Internal capacitive humidity sensor + NTC thermistor take readings
+2. A small MCU inside the DHT11 converts analog values to digital
+3. Data is transmitted over a proprietary single-wire protocol on the data pin
+4. The ESP32 requests a reading every 10 seconds (DHT11 is slow)
+5. Both temperature and humidity come from the same data pin
+
+**Pinout:**
+
+```
+    ARD-360 Module
+    ┌──────────────┐
+    │   ○  ○  ○  ○ │
+    │  VCC NC DT GND│
+    └──────────────┘
+```
+
+| Pin | Connects To | Notes |
+|-----|------------|-------|
+| VCC | ESP32 3V3 | Works fine from 3.3V |
+| DT | ESP32 GPIO 13 | Digital data (single-wire protocol) |
+| GND | Common GND | |
+| NC | Not connected | |
+
+**Important notes:**
+- DHT11 reads slowly — firmware limits reads to once per 10 seconds
+- First reading after boot may fail; subsequent reads are stable
+- ±5% RH tolerance is not lab-grade, but sufficient for room monitoring
+- Exposed to air — place away from heat sources (LED strip, MOSFET) for accurate readings
+
+---
+
 ## Summary: The Signal Chain
 
 ```

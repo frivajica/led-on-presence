@@ -16,6 +16,7 @@ led-on-presence/
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
 │   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
 │   ├── gas_sensor.h / .cpp     # Steren ARD-352 gas sensor reading
+│   ├── temperature_sensor.h / .cpp # Steren ARD-360 temp/humidity (DHT11)
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/                       # This documentation
 ```
@@ -438,10 +439,30 @@ Reads both the digital pin (instant alarm) and analog pin (concentration level).
 
 ---
 
+## `src/temperature_sensor.cpp` — Steren ARD-360 / DHT11
+
+```cpp
+static DHT dht(PIN_DHT, DHT11);
+
+void setupTemperatureSensor() {
+  dht.begin();
+}
+
+bool temperaturePoll() {
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  // ...
+}
+```
+
+The DHT11 is slow — firmware limits reads to once per 10 seconds (`DHT_READ_INTERVAL`). Each `temperaturePoll()` call checks the interval internally. The Adafruit DHT library handles the single-wire protocol. If a read fails (returns NaN), the previous valid value is kept.
+
+---
+
 ## `src/web_server.cpp` — Debug Web UI
 
 Serves a minimal HTML page at `http://<esp32-ip>` with:
-- Live sensor values (presence, gas, brightness, distance)
+- Live sensor values (presence, gas, brightness, distance, temperature, humidity)
 - Light toggle button
 - Auto-refreshes every second
 

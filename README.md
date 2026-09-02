@@ -9,6 +9,7 @@ Motion-activated 24V COB LED strip with smooth PWM dimming, controlled by an ESP
 - **Button** toggles between modes. Built-in LED (GPIO 2) is ON in manual mode.
 - **WiFi**: Connects to your network for wireless updates and Home Assistant integration.
 - **Gas detection**: Steren ARD-352 sensor monitors air quality. Alarm threshold configurable from Home Assistant.
+- **Temperature & humidity**: Steren ARD-360 (DHT11) monitors room conditions.
 - **Web UI**: Live sensor dashboard at `http://<esp32-ip>`.
 
 ## Components
@@ -21,6 +22,7 @@ Motion-activated 24V COB LED strip with smooth PWM dimming, controlled by an ESP
 | IRLZ44N MOSFET | 1 | PWM dimming of 24V LED strip |
 | LM2596 Buck Converter | 1 | Steps 24V down to 5V for ESP32 |
 | Steren ARD-352 Gas Sensor | 1 | Smoke and gas detection (MQ-2 based) |
+| Steren ARD-360 Temp/Humidity Sensor | 1 | Room temperature and humidity (DHT11) |
 | Potentiometer (10kΩ) | 1 | Brightness control |
 | Momentary push button | 1 | Mode toggle |
 | 24V DC Power Supply | 1 | Powers LED strip + ESP32 (via LM2596) |
@@ -72,6 +74,7 @@ See [docs/wiring.md](docs/wiring.md) for step-by-step connections with diagrams.
 | IRLZ44N MOSFET | Gate → GPIO 25, Source → GND, Drain → LED− |
 | LD2410C | VCC → ESP32 3V3, TX → GPIO 16, RX → GPIO 17, GND → GND |
 | Gas sensor (ARD-352) | VCC → 5V, GND → GND, DO → GPIO 14, AO → GPIO 32 |
+| Temp/humidity (ARD-360) | VCC → 3V3, GND → GND, Data → GPIO 13 |
 | LED strip | + → 24V+, − → MOSFET Drain |
 
 **Important:** Gas sensor VCC must be 5V (heater requirement). All other sensors use 3.3V.
@@ -89,6 +92,8 @@ Once WiFi + MQTT are configured, the device auto-registers in Home Assistant:
 | `sensor.radar_distance` | Sensor | Detection distance in cm |
 | `sensor.gas_level` | Sensor | Gas concentration (0-4095) |
 | `binary_sensor.gas_detected` | Binary sensor | Gas alarm (ON/OFF) |
+| `sensor.temperature` | Sensor | Room temperature (°C) |
+| `sensor.humidity` | Sensor | Room humidity (%) |
 | `sensor.brightness_pot` | Sensor | Potentiometer position |
 | `number.gas_threshold` | Number | Gas alarm threshold (configurable) |
 
@@ -99,6 +104,8 @@ led-on-presence/light/state          → {"state":"ON","brightness":128}
 led-on-presence/light/set            → {"state":"ON","brightness":200}
 led-on-presence/binary_sensor/presence/state → "ON" / "OFF"
 led-on-presence/sensor/gas_level/state       → "350"
+led-on-presence/sensor/temperature/state     → "23.5"
+led-on-presence/sensor/humidity/state        → "45.2"
 led-on-presence/config/gas_threshold/set     → "400"
 ```
 
@@ -130,6 +137,7 @@ All settings live in `include/config.h`.
 #define PIN_MOSFET         25   // must be PWM-capable
 #define PIN_GAS_DIGITAL    14   // MQ-2 digital output
 #define PIN_GAS_ANALOG     32   // MQ-2 analog output
+#define PIN_DHT            13   // DHT11 data pin (ARD-360)
 ```
 
 ### Tune the radar sensor
@@ -166,6 +174,7 @@ led-on-presence/
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
 │   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
 │   ├── gas_sensor.h / .cpp     # Steren ARD-352 gas sensor reading
+│   ├── temperature_sensor.h / .cpp # Steren ARD-360 temp/humidity (DHT11)
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/
     ├── arduino-basics.md       # Arduino intro for web devs

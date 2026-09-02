@@ -185,7 +185,33 @@ The gas sensor has 4 pins: VCC, GND, DO (digital), AO (analog).
 
 ---
 
-## Step 6: Button → ESP32
+## Step 6: Temperature/Humidity Sensor (Steren ARD-360) → ESP32
+
+The ARD-360 is a DHT11 sensor with 4 pins: VCC, NC (not connected), Data, GND.
+
+```
+    Steren ARD-360 Temp/Humidity Sensor
+    ┌──────────────┐
+    │   ○  ○  ○  ○ │
+    │  VCC NC DT GND│
+    └──────────────┘
+         │      │
+         │      └──────→ ESP32 GPIO 13 (digital data)
+         └──────────────→ ESP32 3V3
+```
+
+| Sensor Pin | Connects To | Notes |
+|------------|-----------|-------|
+| VCC | ESP32 3V3 | Works from 3.3V |
+| DT | ESP32 GPIO 13 | Single-wire digital data |
+| GND | Common GND | |
+| NC | Not connected | |
+
+**Note:** Place the sensor away from heat sources (LED strip, MOSFET, buck converter) for accurate room temperature readings.
+
+---
+
+## Step 7: Button → ESP32
 
 ```
     ┌─────────┐
@@ -208,7 +234,7 @@ The button connects the two legs when pressed. We use `INPUT_PULLUP` in code, so
 
 ---
 
-## Step 7: LED Strip → 24V Circuit
+## Step 8: LED Strip → 24V Circuit
 
 This is where you switch the high voltage. **Keep these wires away from the ESP32 side wires.**
 
@@ -238,7 +264,7 @@ When the MOSFET is ON (Gate = HIGH), current flows from 24V+ through the LED str
 
 ---
 
-## Step 8: Common Ground
+## Step 9: Common Ground
 
 This is the most critical connection. **All grounds must be connected:**
 
@@ -348,9 +374,10 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 8. ✅ LD2410C wired correctly (3V3, GPIO 16, GPIO 17 — direct, no voltage divider!)
 9. ✅ Button wired correctly (GPIO 27, GND)
 10. ✅ Gas sensor wired correctly (5V from LM2596, GPIO 14, GPIO 32, GND)
-11. ✅ No wire crosses between ESP32 side and 24V side
-12. ✅ 24V supply is UNPLUGGED from wall outlet
-13. ✅ USB is DISCONNECTED (using LM2596 for power)
+11. ✅ Temp/humidity sensor wired correctly (3V3, GPIO 13, GND)
+12. ✅ No wire crosses between ESP32 side and 24V side
+13. ✅ 24V supply is UNPLUGGED from wall outlet
+14. ✅ USB is DISCONNECTED (using LM2596 for power)
 
 ---
 
