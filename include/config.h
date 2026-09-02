@@ -31,6 +31,7 @@
 
 // --- PWM ---
 #define FADE_STEPS_PER_SEC  510UL  // Fade step density (0 = instant). 510 ≈ smooth fade over full 0-255 range.
+#define FADE_MIN_MS         300UL  // Minimum fade duration (prevents invisible short fades)
 
 // --- Modes ---
 enum Mode {

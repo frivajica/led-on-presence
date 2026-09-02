@@ -44,7 +44,8 @@ static void fadeUpdate() {
     fading = false;
     return;
   }
-  unsigned long duration = (unsigned long)distance * 1000UL / FADE_STEPS_PER_SEC;
+  unsigned long duration = max((unsigned long)FADE_MIN_MS,
+                               (unsigned long)distance * 1000UL / FADE_STEPS_PER_SEC);
   unsigned long elapsed = millis() - fadeStartTime;
   if (elapsed >= duration) {
     currentBrightness = targetBrightness;
