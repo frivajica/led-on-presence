@@ -1,25 +1,25 @@
 # LED-on-presence
 
-Motion-activated 24V COB LED strip with smooth PWM dimming, controlled by an Arduino Uno.
+Motion-activated 24V COB LED strip with smooth PWM dimming, controlled by an ESP32 and an LD2410C mmWave radar sensor.
 
 ## How It Works
 
-- **Motion mode** (default): PIR sensor detects movement → light fades up. After 30s with no motion → light fades out. Potentiometer sets max brightness.
-- **Manual mode**: Potentiometer directly controls brightness (0–100%). Motion sensor is ignored.
-- **Button** toggles between modes. Built-in LED (pin 13) is ON in manual mode.
+- **Motion mode** (default): Radar detects presence → light fades up. After 15s with no presence + 2s cooldown → light fades out. Potentiometer sets max brightness.
+- **Manual mode**: Potentiometer directly controls brightness (0–100%). Radar is ignored.
+- **Button** toggles between modes. Built-in LED (GPIO 2) is ON in manual mode.
 
 ## Components
 
 | Part | Qty | Purpose |
 |------|-----|---------|
-| Arduino Uno R3 | 1 | Brain |
+| ESP-WROOM-32 DevKit V1 | 1 | Brain (3.3V logic, hardware UART2) |
 | 24V COB LED Strip (Lumiora) | 1 | Light |
-| HC-SR501 PIR Motion Sensor | 1 | Motion detection |
+| LD2410C mmWave Radar Sensor | 1 | Presence detection (moving + stationary) |
 | IRLZ44N MOSFET | 1 | PWM dimming of 24V LED strip |
-| LM2596 Buck Converter | 1 | Steps 24V down to 5V for Arduino |
+| LM2596 Buck Converter | 1 | Steps 24V down to 5V for ESP32 |
 | Potentiometer (10kΩ) | 1 | Brightness control |
 | Momentary push button | 1 | Mode toggle |
-| 24V DC Power Supply | 1 | Powers LED strip + Arduino (via LM2596) |
+| 24V DC Power Supply | 1 | Powers LED strip + ESP32 (via LM2596) |
 | Breadboard (400 tie-points) | 1 | Prototyping platform |
 | Jumper wires | ~12 | Connections |
 
@@ -27,21 +27,16 @@ Motion-activated 24V COB LED strip with smooth PWM dimming, controlled by an Ard
 
 ```bash
 # Build
-pio run
+~/.platformio/penv/bin/pio run
 
-# Upload (connect Arduino via USB first)
-pio run -t upload
+# Upload (connect ESP32 via USB first)
+~/.platformio/penv/bin/pio run -t upload
 
 # Monitor serial output
-pio device monitor
-```
-
-If `pio` is not on your PATH:
-```bash
-~/.platformio/penv/bin/pio run
-~/.platformio/penv/bin/pio run -t upload
 ~/.platformio/penv/bin/pio device monitor
 ```
+
+If `pio` is on your PATH, use `pio` directly instead of the full path.
 
 ## Wiring
 
@@ -53,20 +48,20 @@ New to breadboards? Start with [docs/breadboard.md](docs/breadboard.md) — it e
 
 | Component | Pins |
 |-----------|------|
-| LM2596 | 24V+ → IN+, 24V− → IN−, OUT+ → Arduino 5V, OUT− → GND |
-| Potentiometer | 5V → A0 → GND |
-| Motion sensor | 5V → D2 → GND |
-| Button | D3 → GND (uses INPUT_PULLUP) |
-| IRLZ44N MOSFET | Gate → D6, Source → GND, Drain → LED− |
+| LM2596 | 24V+ → IN+, 24V− → IN−, OUT+ → ESP32 VIN, OUT− → GND |
+| Potentiometer | 3V3 → left pin, GPIO 34 → middle, GND → right |
+| Button | GPIO 27 → GND (uses INPUT_PULLUP) |
+| IRLZ44N MOSFET | Gate → GPIO 25, Source → GND, Drain → LED− |
+| LD2410C | VCC → ESP32 3V3, TX → GPIO 16, RX → GPIO 17, GND → GND |
 | LED strip | + → 24V+, − → MOSFET Drain |
 
 **Important:** Disconnect USB when powering via LM2596. Do not use both simultaneously.
 
 ## Customization
 
-### Change the fade speed
+All settings live in `include/config.h`.
 
-Edit `FADE_STEP` in `include/config.h`:
+### Change the fade speed
 
 ```cpp
 #define FADE_STEP 5  // brightness change per loop (0-255)
@@ -77,45 +72,57 @@ Edit `FADE_STEP` in `include/config.h`:
 
 ### Change the motion timeout
 
-Edit `MOTION_TIMEOUT_MS` in `include/config.h`:
-
 ```cpp
-#define MOTOTION_TIMEOUT_MS 30000UL  // 30 seconds
+#define MOTION_TIMEOUT_MS 15000UL  // 15 seconds after last presence
 ```
 
 ### Change pins
 
-Edit `include/config.h`:
-
 ```cpp
-#define PIN_POTENTIOMETER  A0
-#define PIN_MOTION_SENSOR  2
-#define PIN_BUTTON         3
-#define PIN_MOSFET         6   // Must be PWM pin (3, 5, 6, 9, 10, or 11)
+#define PIN_POTENTIOMETER  34   // ADC1, input-only
+#define PIN_BUTTON         27   // uses INPUT_PULLUP
+#define PIN_MOSFET         25   // must be PWM-capable
 ```
 
-### Adjust HC-SR501 sensor
+### Tune the radar sensor
 
-- **Left pot (sensitivity):** Detection range, 3–7m. Set to ~50%.
-- **Right pot (delay):** Set to minimum (fully CCW). The Arduino handles the 30s timeout.
+The LD2410C is configured automatically on first boot and stores settings in flash. To reconfigure, change these constants and re-upload:
+
+```cpp
+#define RADAR_MAX_GATE       8    // 0–8, detect across full range (~6m)
+#define RADAR_GATE_SENSITIVITY 10  // 0–100, lower = more sensitive (0 disables gate)
+#define RADAR_IDLE_TIME      10   // seconds absent before "no one" reported
+```
 
 ## Project Structure
 
 ```
 led-on-presence/
-├── platformio.ini          # Build config
+├── platformio.ini          # Build config (ESP32, ld2410 library)
 ├── include/
 │   └── config.h            # Pin definitions and constants
 ├── src/
-│   ├── main.cpp            # Entry point — setup + loop
-│   ├── inputs.h / .cpp     # Read sensors and button
-│   └── outputs.h / .cpp    # Control MOSFET and LED
+│   ├── main.cpp            # Entry point — setup, loop, state machine
+│   ├── inputs.h / .cpp     # Read potentiometer and button
+│   ├── outputs.h / .cpp    # Control MOSFET (PWM) and mode LED
+│   └── radar.h / .cpp      # LD2410C radar communication and config
 └── docs/
     ├── arduino-basics.md   # Arduino intro for web devs
     ├── breadboard.md       # Breadboard guide with visual layouts
     ├── components.md       # What each part does
     ├── wiring.md           # Connection guide with diagrams
     └── code-walkthrough.md # Line-by-line code explanation
+```
+
+## Serial Output
+
+On boot, you'll see:
+
+```
+Radar: config OK
+LED-on-presence started
+Mode: MOTION (default)
+Pot: 512 Bright: 127/128 Pres: Y 85cm State: ACTIVE 15s Light: ON
 ```
 
 ## Docs

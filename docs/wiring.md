@@ -33,7 +33,7 @@
 
 ## Step 1: LM2596 — Step Down 24V to 5V
 
-The LM2596 converts the 24V supply to 5V for the ESP32 and LD2510C.
+The LM2596 converts the 24V supply to 5V for the ESP32.
 
 **Before connecting to the ESP32:** Adjust the output voltage.
 
@@ -140,7 +140,7 @@ The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationa
 
 | Sensor Pin | Connect To | Notes |
 |------------|-----------|-------|
-| VCC | ESP32 5V (from LM2596 or USB) | Powers the sensor |
+| VCC | ESP32 3V3 | Powers the sensor (direct, both 3.3V) |
 | TX | ESP32 GPIO 16 (UART2 RX) | Sensor sends data to ESP32 — direct connection, both 3.3V |
 | RX | ESP32 GPIO 17 (UART2 TX) | ESP32 sends commands to sensor — direct connection, both 3.3V |
 | OUT | (not used) | GPIO presence output — not needed with UART |
@@ -298,7 +298,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │  LD2410C         │
                     │  RADAR           │
                     │                  │
-                    │  VCC ────────────┼──── ESP32 5V (or 3.3V)
+                    │  VCC ────────────┼──── ESP32 3V3
                     │  TX ─────────────┼──── ESP32 GPIO 16 (direct!)
                     │  RX ─────────────┼──── ESP32 GPIO 17 (direct!)
                     │  GND ────────────┼──── Common GND
@@ -316,7 +316,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
 7. ✅ Potentiometer wired correctly (3.3V, GPIO 34, GND)
-8. ✅ LD2410C wired correctly (5V, GPIO 16, GPIO 17 — direct, no voltage divider!)
+8. ✅ LD2410C wired correctly (3V3, GPIO 16, GPIO 17 — direct, no voltage divider!)
 9. ✅ Button wired correctly (GPIO 27, GND)
 10. ✅ No wire crosses between ESP32 side and 24V side
 11. ✅ 24V supply is UNPLUGGED from wall outlet

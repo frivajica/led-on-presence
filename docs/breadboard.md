@@ -299,7 +299,7 @@ The LD2410C has 5 pins but we only use 4 (VCC, TX, RX, GND). Use male-to-female 
        VCC TX  RX  OUT GND
 
     Wires:
-    VCC ──→ + rail (3.3V or 5V)
+    VCC ──→ + rail (3.3V from ESP32)
     TX  ──→ ESP32 GPIO 16 (UART2 RX) — direct connection!
     RX  ──→ ESP32 GPIO 17 (UART2 TX) — direct connection!
     GND ──→ − rail (GND)

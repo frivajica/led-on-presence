@@ -159,8 +159,8 @@ bool readButton() {
 ### PWM Brightness Control
 
 ```cpp
-void setBrightness(uint8_t pin, uint8_t value) {
-  analogWrite(pin, value);
+void setBrightness(uint8_t value) {
+  analogWrite(PIN_MOSFET, value);
 }
 ```
 
@@ -171,7 +171,7 @@ void setBrightness(uint8_t pin, uint8_t value) {
 
 The MOSFET switches the 24V circuit on and off ~490 times per second (the default PWM frequency). Your eyes perceive this as average brightness.
 
-**Web analogy:** `analogWrite(pin, 127)` is like setting `opacity: 0.5` on an element — it's a continuous value, not just on/off.
+**Web analogy:** `analogWrite(127)` is like setting `opacity: 0.5` on an element — it's a continuous value, not just on/off.
 
 ### Mode LED
 
@@ -182,6 +182,75 @@ void setModeLed(bool on) {
 ```
 
 The built-in LED on GPIO 2 is active-high: `HIGH` = LED ON.
+
+---
+
+## `src/radar.cpp` — LD2410C Radar Communication
+
+### Auto-Configuration
+
+```cpp
+static bool radarNeedsConfig() {
+  if (radar.max_moving_gate != RADAR_MAX_GATE ||
+      radar.max_stationary_gate != RADAR_MAX_GATE ||
+      radar.sensor_idle_time != RADAR_IDLE_TIME) {
+    return true;
+  }
+  for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
+    if (radar.motion_sensitivity[gate] != RADAR_GATE_SENSITIVITY ||
+        radar.stationary_sensitivity[gate] != RADAR_GATE_SENSITIVITY) {
+      return true;
+    }
+  }
+  return false;
+}
+```
+
+The LD2410C stores its configuration in flash memory. On first boot (or if you change constants), we write the config once. On subsequent boots, `radarNeedsConfig()` compares the sensor's current settings against our constants — if they match, we skip configuration. This gives us fast boot times and no unnecessary flash wear.
+
+### Setup
+
+```cpp
+void setupRadar() {
+  Serial2.setRxBufferSize(2048);
+  Serial2.begin(RADAR_BAUD_RATE, SERIAL_8N1, PIN_RADAR_RX, PIN_RADAR_TX);
+  delay(500);
+  while (Serial2.available()) Serial2.read();
+
+  sensorReady = radar.begin(Serial2, false);
+
+  // Defensive: recover a sensor left stuck in config mode
+  Serial2.write(CMD_LEAVE_CONFIG, sizeof(CMD_LEAVE_CONFIG));
+  Serial2.flush();
+  delay(100);
+  while (Serial2.available()) Serial2.read();
+  ...
+}
+```
+
+Key points:
+- **256000 baud** — the LD2410C's factory default. We never change it.
+- **`Serial2.setRxBufferSize(2048)`** — larger buffer for reliable reception at high baud rates.
+- **LEAVE_CFG command** — sent defensively at boot in case a previous power loss left the sensor stuck in config mode. Ignored when already in data mode.
+- **`radar.begin(Serial2, false)`** — the `false` means "don't try to configure baud rate" (we know it's already 256000). This call always returns `true`, so we use the `sensorReady` flag only as a guard.
+
+### Reading Presence
+
+```cpp
+bool radarPresenceDetected() {
+  if (!sensorReady) return false;
+  radar.read();
+  return radar.presenceDetected();
+}
+```
+
+`radar.read()` pulls available bytes from Serial2, parses complete frames, and updates the sensor's internal state. `presenceDetected()` returns `true` if the sensor sees a moving OR stationary target.
+
+The LD2410C uses two detection channels:
+- **Moving targets** — detected via Doppler frequency shift
+- **Stationary targets** — detected via micro-movements (breathing, slight posture changes)
+
+Both count as "presence" for our purposes.
 
 ---
 
@@ -214,7 +283,7 @@ These persist across `loop()` calls (via `static`). They represent the complete 
 
 ```cpp
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   setupInputs();
   setupOutputs();
   setupRadar();
@@ -232,67 +301,27 @@ void setup() {
 
 ```cpp
 void loop() {
-  // 1. Check button
   if (readButton()) {
     currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
+    Serial.print(F("Mode: "));
+    Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
   }
 
-  // 2. Read inputs
   int potValue = readPotentiometer();
   bool presence = radarPresenceDetected();
 
-  // 3. Motion state machine
-  if (currentMode == MODE_MOTION) {
-    switch (motionState) {
-      case MOTION_IDLE:
-        if (presence) {
-          motionState = MOTION_ACTIVE;
-          lightOn = true;
-          lastMotionTime = millis();
-        }
-        break;
+  updateMotionState(potValue, presence);
 
-      case MOTION_ACTIVE:
-        if (presence) {
-          lastMotionTime = millis();
-        }
-        if (millis() - lastMotionTime > MOTION_TIMEOUT_MS) {
-          motionState = MOTION_COOLDOWN;
-          cooldownStartTime = millis();
-          lightOn = false;
-        }
-        break;
-
-      case MOTION_COOLDOWN:
-        if (millis() - cooldownStartTime > COOLDOWN_MS) {
-          motionState = MOTION_IDLE;
-        }
-        break;
-    }
-  } else {
-    // Manual mode: potentiometer directly controls on/off
-    lightOn = potValue > 5;
-    motionState = MOTION_IDLE;
-  }
-
-  // 4. Set target brightness
   if (lightOn) {
-    targetBrightness = map(potValue, 0, 1023, 255, 0);
+    fadeToward(map(potValue, 0, 1023, 255, 0));
   } else {
-    targetBrightness = 0;
+    fadeToward(0);
   }
 
-  // 5. Fade current toward target
-  if (currentBrightness < targetBrightness) {
-    currentBrightness = min((int)(currentBrightness + FADE_STEP), (int)targetBrightness);
-  } else if (currentBrightness > targetBrightness) {
-    currentBrightness = max((int)(currentBrightness - FADE_STEP), (int)targetBrightness);
-  }
-
-  // 6. Apply
-  setBrightness(PIN_MOSFET, currentBrightness);
+  setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
 
+  printStatus(potValue, presence);
   delay(20);
 }
 ```
@@ -303,21 +332,21 @@ void loop() {
 
 2. **Read sensors:** Get potentiometer position and radar presence state.
 
-3. **Motion state machine:** Three states:
+3. **Motion state machine:** `updateMotionState()` handles the three states:
    - `MOTION_IDLE` → if presence detected, move to ACTIVE, turn light on
    - `MOTION_ACTIVE` → keep resetting timer while presence detected, fade out after 15s timeout
    - `MOTION_COOLDOWN` → ignore sensor for 2s (prevents LED heat from re-triggering), then back to IDLE
    - Manual mode → light on if pot > 5, ignore sensor
 
-4. **Target brightness:** Map potentiometer (0–1023) to PWM (0–255). Clockwise = dimmer (inverted map). If light is off, target is 0.
+4. **Fade:** `fadeToward()` gradually moves `currentBrightness` toward the target by `FADE_STEP`. If light is off, target is 0.
 
-5. **Fade:** Gradually move `currentBrightness` toward `targetBrightness` by `FADE_STEP`. `min()` and `max()` prevent overshooting. The `(int)` casts are needed because ESP32's C++14 compiler is strict about mixed types in `min()`/`max()`.
+5. **Output:** Write PWM value to MOSFET, update mode LED.
 
-6. **Output:** Write PWM value to MOSFET, update mode LED.
+6. **Debug:** `printStatus()` prints sensor state every 500ms (not every loop, which would flood the serial monitor).
 
 **`map()` function:** Scales a number from one range to another. `map(potValue, 0, 1023, 255, 0)` converts the potentiometer's 0–1023 range to PWM's 255–0 range (inverted for clockwise = dimmer).
 
-**`min()` / `max()`:** Clamp the value so it doesn't exceed the target. Without these, `currentBrightness` could overshoot.
+**`fadeToward()` helper:** Gradually moves `currentBrightness` toward the target by `FADE_STEP`. `min()` and `max()` clamp the value so it doesn't overshoot. The `(int)` casts are needed because ESP32's C++14 compiler is strict about mixed types in `min()`/`max()`.
 
 **`delay(20)`:** 20ms per loop = 50 loops per second. This controls the fade speed. With `FADE_STEP = 5`, the LED ramps from 0 to 255 in about 1 second.
 

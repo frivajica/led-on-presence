@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 void setupOutputs();
-void setBrightness(uint8_t pin, uint8_t value);
+void setBrightness(uint8_t value);
 void setModeLed(bool on);
 
 #endif

@@ -4,7 +4,12 @@
 #include <ld2410.h>
 
 static ld2410 radar;
-static bool _radarConnected = false;
+static bool sensorReady = false;
+
+// LD2410 command: leave configuration mode (restore data mode).
+// Sent defensively at boot in case a previous power loss left the sensor stuck
+// in config mode. Ignored when already in data mode.
+static const byte CMD_LEAVE_CONFIG[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
 
 static bool radarNeedsConfig() {
   if (radar.max_moving_gate != RADAR_MAX_GATE ||
@@ -21,18 +26,20 @@ static bool radarNeedsConfig() {
   return false;
 }
 
+// Configure the LD2410C sensor on first boot (or if config changed).
+// The sensor stores config in flash, so subsequent boots skip this — fast
+// boot and no unnecessary flash wear.
 void setupRadar() {
   Serial2.setRxBufferSize(2048);
   Serial2.begin(RADAR_BAUD_RATE, SERIAL_8N1, PIN_RADAR_RX, PIN_RADAR_TX);
   delay(500);
   while (Serial2.available()) Serial2.read();
 
-  _radarConnected = radar.begin(Serial2, false);
+  sensorReady = radar.begin(Serial2, false);
 
   // Defensive: recover a sensor left stuck in config mode (e.g. power lost
   // mid-configuration). Ignored by the sensor when already in data mode.
-  static const byte LEAVE_CFG[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
-  Serial2.write(LEAVE_CFG, sizeof(LEAVE_CFG));
+  Serial2.write(CMD_LEAVE_CONFIG, sizeof(CMD_LEAVE_CONFIG));
   Serial2.flush();
   delay(100);
   while (Serial2.available()) Serial2.read();
@@ -55,27 +62,13 @@ void setupRadar() {
   Serial.println(ok ? F("Radar: configured") : F("Radar: config FAIL"));
 }
 
-bool radarConnected() {
-  return _radarConnected;
-}
-
 bool radarPresenceDetected() {
-  if (!_radarConnected) return false;
+  if (!sensorReady) return false;
   radar.read();
   return radar.presenceDetected();
 }
 
-bool radarMovingTargetDetected() {
-  if (!_radarConnected) return false;
-  return radar.movingTargetDetected();
-}
-
-bool radarStationaryTargetDetected() {
-  if (!_radarConnected) return false;
-  return radar.stationaryTargetDetected();
-}
-
 int radarDetectedDistance() {
-  if (!_radarConnected) return 0;
+  if (!sensorReady) return 0;
   return radar.detectionDistance();
 }

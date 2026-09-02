@@ -9,8 +9,8 @@ void setupOutputs() {
   digitalWrite(PIN_MODE_LED, LOW);
 }
 
-void setBrightness(uint8_t pin, uint8_t value) {
-  analogWrite(pin, value);
+void setBrightness(uint8_t value) {
+  analogWrite(PIN_MOSFET, value);
 }
 
 void setModeLed(bool on) {
