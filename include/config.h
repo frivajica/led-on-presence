@@ -22,6 +22,10 @@
 #define PIN_GAS_ANALOG     32   // Analog output: voltage proportional to concentration
 #define GAS_THRESHOLD_DEFAULT 400  // Default alarm threshold (0-4095); overridable via MQTT
 
+// --- Temperature / Humidity Sensor (Steren ARD-360 / DHT11) ---
+#define PIN_DHT            13   // DHT11 data pin
+#define DHT_READ_INTERVAL  10000UL  // DHT11 is slow — re-read at most every 10s
+
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 

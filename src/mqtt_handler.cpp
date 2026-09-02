@@ -50,6 +50,8 @@ static void sendDiscovery() {
     {"sensor/gas_level", "Gas Level"},
     {"sensor/brightness_pot", "Brightness Pot"},
     {"sensor/radar_distance", "Radar Distance"},
+    {"sensor/temperature", "Temperature"},
+    {"sensor/humidity", "Humidity"},
   };
   for (auto& s : sensors) {
     String topic = base + s[0] + "/config";
@@ -126,4 +128,10 @@ void mqttPublishGas(uint16_t level, bool alarm) {
 void mqttPublishPot(int value) {
   if (!mqtt.connected()) return;
   mqtt.publish(topicFor("sensor/brightness_pot/state").c_str(), String(value).c_str(), true);
+}
+
+void mqttPublishTemperature(float celsius, float humidity) {
+  if (!mqtt.connected()) return;
+  mqtt.publish(topicFor("sensor/temperature/state").c_str(), String(celsius, 1).c_str(), true);
+  mqtt.publish(topicFor("sensor/humidity/state").c_str(), String(humidity, 1).c_str(), true);
 }

@@ -5,6 +5,7 @@
 #include "wifi_manager.h"
 #include "mqtt_handler.h"
 #include "gas_sensor.h"
+#include "temperature_sensor.h"
 #include "web_server.h"
 #include <ArduinoOTA.h>
 
@@ -108,6 +109,13 @@ static void printStatus(int potValue, bool presence) {
   Serial.print(F(" Gas: "));
   Serial.print(gasLevel);
   if (gasIsAlarm()) Serial.print(F(" ALARM"));
+  if (temperatureIsValid()) {
+    Serial.print(F(" Temp: "));
+    Serial.print(temperatureGetCelsius(), 1);
+    Serial.print(F("C Hum: "));
+    Serial.print(temperatureGetHumidity(), 1);
+    Serial.print(F("%"));
+  }
   Serial.println();
 }
 
@@ -117,6 +125,7 @@ void setup() {
   setupOutputs();
   setupRadar();
   setupGasSensor();
+  setupTemperatureSensor();
 
   wifiSetup();
   mqttSetup();
@@ -133,6 +142,7 @@ void loop() {
   ArduinoOTA.handle();
   wifiLoop();
   mqttLoop();
+  temperaturePoll();
 
   if (readButton()) {
     currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
@@ -161,6 +171,9 @@ void loop() {
     mqttPublishLight(isLightOn(), currentBrightness);
     mqttPublishGas(gasReadAnalog(), gasIsAlarm());
     mqttPublishPot(potValue);
+    if (temperatureIsValid()) {
+      mqttPublishTemperature(temperatureGetCelsius(), temperatureGetHumidity());
+    }
   }
 
   printStatus(potValue, presence);

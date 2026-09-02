@@ -2,6 +2,7 @@
 #include "config.h"
 #include "wifi_manager.h"
 #include "gas_sensor.h"
+#include "temperature_sensor.h"
 #include "outputs.h"
 #include "radar.h"
 #include <ESPAsyncWebServer.h>
@@ -34,6 +35,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="row"><span class="label">Gas Level</span><span id="gas">-</span></div>
   <div class="row"><span class="label">Gas Alarm</span><span id="alarm">-</span></div>
   <div class="row"><span class="label">Gas Threshold</span><span id="thresh">-</span></div>
+  <div class="row"><span class="label">Temperature</span><span id="temp">-</span></div>
+  <div class="row"><span class="label">Humidity</span><span id="hum">-</span></div>
   <button onclick="toggle()">Toggle Light</button>
   <script>
     function update() {
@@ -49,6 +52,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('alarm').textContent = d.gasAlarm ? 'ALARM' : 'OK';
         document.getElementById('alarm').className = d.gasAlarm ? 'off' : 'on';
         document.getElementById('thresh').textContent = d.gasThreshold;
+        document.getElementById('temp').textContent = d.temperature !== null ? d.temperature + ' °C' : '-';
+        document.getElementById('hum').textContent = d.humidity !== null ? d.humidity + ' %' : '-';
       });
     }
     function toggle() { fetch('/api/toggle'); }
@@ -76,6 +81,13 @@ void webServerSetup() {
     doc["gasLevel"] = gasReadAnalog();
     doc["gasAlarm"] = gasIsAlarm();
     doc["gasThreshold"] = gasGetThreshold();
+    if (temperatureIsValid()) {
+      doc["temperature"] = temperatureGetCelsius();
+      doc["humidity"] = temperatureGetHumidity();
+    } else {
+      doc["temperature"] = nullptr;
+      doc["humidity"] = nullptr;
+    }
     char buf[256];
     serializeJson(doc, buf, sizeof(buf));
     req->send(200, "application/json", buf);
