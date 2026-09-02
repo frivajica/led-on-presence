@@ -30,7 +30,7 @@
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 
 // --- PWM ---
-#define FADE_DURATION_MS    500UL  // Fade duration in milliseconds (0 = instant)
+#define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-255). Scales with target.
 
 // --- Modes ---
 enum Mode {
