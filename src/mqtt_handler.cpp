@@ -1,7 +1,6 @@
 #include "mqtt_handler.h"
 #include "config.h"
 #include "secrets.h"
-#include "gas_sensor.h"
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <PubSubClient.h>
@@ -16,23 +15,6 @@ static String topicFor(const char* suffix) {
   return String(MQTT_DEVICE_NAME) + "/" + suffix;
 }
 
-static void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String msg;
-  for (unsigned int i = 0; i < length; i++) {
-    msg += (char)payload[i];
-  }
-
-  String thresholdTopic = topicFor("config/gas_threshold/set");
-  if (String(topic) == thresholdTopic) {
-    uint16_t val = msg.toInt();
-    if (val > 0 && val <= 4095) {
-      gasSetThreshold(val);
-      Serial.print(F("MQTT: gas threshold set to "));
-      Serial.println(val);
-    }
-  }
-}
-
 static void mqttConnectTask(void* param) {
   for (;;) {
     if (mqtt.connected() || WiFi.status() != WL_CONNECTED) {
@@ -45,7 +27,6 @@ static void mqttConnectTask(void* param) {
     if (mqtt.connect(MQTT_DEVICE_NAME)) {
       Serial.println(F("MQTT: connected"));
       discoverySent = false;
-      mqtt.subscribe(topicFor("config/gas_threshold/set").c_str());
     }
     mqttConnecting = false;
     vTaskDelay(pdMS_TO_TICKS(5000));
@@ -54,11 +35,10 @@ static void mqttConnectTask(void* param) {
 
 static void sendDiscovery() {
   String base = "homeassistant/";
-  String dev = "\"dev\":[\"ids\":[\"" + String(MQTT_DEVICE_NAME) + "\"],\"name\":\"LED on Presence\",\"mf\":\"DIY\"]";
+  String dev = "\"dev\":[\"ids\":[\"" + String(MQTT_DEVICE_NAME) + "\"],\"name\":\"LED Multisensor\",\"mf\":\"DIY\"]";
 
   const char* binarySensors[][2] = {
     {"binary_sensor/presence", "Presence"},
-    {"binary_sensor/gas_detected", "Gas Detected"},
   };
   for (auto& s : binarySensors) {
     String topic = base + s[0] + "/config";
@@ -67,11 +47,8 @@ static void sendDiscovery() {
   }
 
   const char* sensors[][2] = {
-    {"sensor/gas_level", "Gas Level"},
     {"sensor/brightness_pot", "Brightness Pot"},
     {"sensor/radar_distance", "Radar Distance"},
-    {"sensor/temperature", "Temperature"},
-    {"sensor/humidity", "Humidity"},
   };
   for (auto& s : sensors) {
     String topic = base + s[0] + "/config";
@@ -83,19 +60,11 @@ static void sendDiscovery() {
   String lightPayload = "{\"name\":\"LED Strip\",\"state_topic\":\"" + topicFor("light/state") + "\",\"command_topic\":\"" + topicFor("light/set") + "\",\"brightness\":true,\"brightness_scale\":255," + dev + "}";
   mqtt.publish(lightTopic.c_str(), lightPayload.c_str(), true);
 
-  String thresholdTopic = base + "number/gas_threshold/config";
-  String thresholdPayload = "{\"name\":\"Gas Threshold\",\"state_topic\":\"" + topicFor("config/gas_threshold/state") + "\",\"command_topic\":\"" + topicFor("config/gas_threshold/set") + "\",\"min\":0,\"max\":4095," + dev + "}";
-  mqtt.publish(thresholdTopic.c_str(), thresholdPayload.c_str(), true);
-
-  String currentThreshold = String(gasGetThreshold());
-  mqtt.publish(topicFor("config/gas_threshold/state").c_str(), currentThreshold.c_str(), true);
-
   discoverySent = true;
 }
 
 void mqttSetup() {
   mqtt.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
-  mqtt.setCallback(mqttCallback);
   mqtt.setBufferSize(512);
 
   xTaskCreatePinnedToCore(mqttConnectTask, "mqtt", 4096, nullptr, 1, nullptr, tskNO_AFFINITY);
@@ -110,8 +79,7 @@ void mqttLoop() {
 }
 
 void mqttPublishAll(bool presence, int distanceCm, bool lightOn, uint8_t brightness,
-                    uint16_t gasLevel, bool gasAlarm, int potValue,
-                    float temperature, float humidity) {
+                    int potValue) {
   if (!mqtt.connected()) return;
 
   mqtt.publish(topicFor("binary_sensor/presence/state").c_str(), presence ? "ON" : "OFF", true);
@@ -124,12 +92,5 @@ void mqttPublishAll(bool presence, int distanceCm, bool lightOn, uint8_t brightn
   serializeJson(lightDoc, lightBuf, sizeof(lightBuf));
   mqtt.publish(topicFor("light/state").c_str(), lightBuf, true);
 
-  mqtt.publish(topicFor("sensor/gas_level/state").c_str(), String(gasLevel).c_str(), true);
-  mqtt.publish(topicFor("binary_sensor/gas_detected/state").c_str(), gasAlarm ? "ON" : "OFF", true);
   mqtt.publish(topicFor("sensor/brightness_pot/state").c_str(), String(potValue).c_str(), true);
-
-  if (!isnan(temperature) && !isnan(humidity)) {
-    mqtt.publish(topicFor("sensor/temperature/state").c_str(), String(temperature, 1).c_str(), true);
-    mqtt.publish(topicFor("sensor/humidity/state").c_str(), String(humidity, 1).c_str(), true);
-  }
 }

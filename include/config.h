@@ -4,8 +4,8 @@
 #include <Arduino.h>
 
 // --- Pin Definitions (ESP32 DevKit V1) ---
-#define PIN_POTENTIOMETER  34   // Potentiometer wiper (ADC1, input-only)
-#define PIN_BUTTON         27   // Mode toggle button (digital input, uses INPUT_PULLUP)
+#define PIN_POTENTIOMETER  13   // Potentiometer wiper (ADC1)
+#define PIN_BUTTON         14   // Mode toggle button (uses INPUT_PULLUP)
 #define PIN_MOSFET         25   // IRLZ44N Gate — PWM output to LED strip
 #define PIN_MODE_LED        2   // Built-in blue LED — indicates current mode
 
@@ -17,15 +17,6 @@
 #define RADAR_MOTION_SENSITIVITY      15  // Movement detection threshold (0-100, lower = more sensitive)
 #define RADAR_STATIONARY_SENSITIVITY   15  // Breathing/still presence threshold (lower = more sensitive)
 #define RADAR_IDLE_TIME    15   // Seconds target must be absent before "no one" reported
-
-// --- Gas Sensor (Steren ARD-352 / MQ-2) ---
-#define PIN_GAS_DIGITAL    14   // Digital output: LOW = gas detected
-#define PIN_GAS_ANALOG     32   // Analog output: voltage proportional to concentration
-#define GAS_THRESHOLD_DEFAULT 400  // Default alarm threshold (0-4095); overridable via MQTT
-
-// --- Temperature / Humidity Sensor (Steren ARD-360 / DHT11) ---
-#define PIN_DHT            13   // DHT11 data pin
-#define DHT_READ_INTERVAL  10000UL  // DHT11 is slow — re-read at most every 10s
 
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
