@@ -15,7 +15,7 @@
 #define RADAR_BAUD_RATE    256000  // LD2410C factory default
 #define RADAR_MAX_GATE     8    // Detect across full range (~6m)
 #define RADAR_MOTION_SENSITIVITY      15  // Movement detection threshold (0-100, lower = more sensitive)
-#define RADAR_STATIONARY_SENSITIVITY   5  // Breathing/still presence threshold (lower = more sensitive)
+#define RADAR_STATIONARY_SENSITIVITY   15  // Breathing/still presence threshold (lower = more sensitive)
 #define RADAR_IDLE_TIME    15   // Seconds target must be absent before "no one" reported
 
 // --- Gas Sensor (Steren ARD-352 / MQ-2) ---
