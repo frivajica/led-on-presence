@@ -1,20 +1,24 @@
 # Components — What Each Part Does
 
-## Arduino Uno R3
+## ESP-WROOM-32 DevKit V1
 
-**What it is:** A small computer on a circuit board. It runs your code in a loop — `setup()` once, then `loop()` forever.
+**What it is:** A small computer on a circuit board based on the ESP32 chip. It runs your code in a loop — `setup()` once, then `loop()` forever.
 
-**Why Uno:** It's the most beginner-friendly Arduino. 14 digital pins, 6 analog inputs, 5V logic, PWM on 6 pins. More than enough for this project.
+**Why ESP32:** Much more powerful than Arduino Uno (240 MHz vs 16 MHz), has 520KB RAM (vs 2KB), 4MB flash (vs 32KB), 34 GPIO pins, and — critically — 3.3V logic. This means the LD2410C radar sensor connects directly without a voltage divider. It also has 3 hardware UARTs, so no unreliable SoftwareSerial needed.
 
 **How it works:**
-- Runs at 16 MHz (slow compared to a Mac, but fine for blinking lights)
-- Has 2 KB RAM, 32 KB flash storage for your code
-- Digital pins output 0V (LOW) or 5V (HIGH)
-- Analog pins (A0–A5) read voltages 0–5V as numbers 0–1023 (10-bit resolution)
-- PWM pins (3, 5, 6, 9, 10, 11) can output variable brightness via `analogWrite()`
+- Runs at 240 MHz (15× faster than Arduino Uno)
+- Has 520 KB RAM, 4 MB flash storage for your code
+- Digital pins output 0V (LOW) or 3.3V (HIGH)
+- Analog pins read voltages 0–3.3V as numbers 0–4095 (12-bit resolution)
+- All digital pins can do PWM via LEDC channels
+- Has built-in WiFi and Bluetooth (not used in this project)
 
 **Key concept — voltage levels:**
-Arduino operates at 5V. Your LED strip operates at 24V. You **cannot** connect 24V directly to an Arduino pin — it will destroy it. The MOSFET acts as a bridge: it switches the 24V circuit using a 5V signal from the Arduino.
+ESP32 operates at 3.3V. Your LED strip operates at 24V. You **cannot** connect 24V directly to an ESP32 pin — it will destroy it. The MOSFET acts as a bridge: it switches the 24V circuit using a 3.3V signal from the ESP32.
+
+**Key difference from Arduino Uno:**
+The ESP32 is 3.3V, not 5V. This is actually better for this project because the LD2410C is also 3.3V — no voltage divider needed on the UART lines.
 
 ---
 
@@ -30,7 +34,7 @@ Arduino operates at 5V. Your LED strip operates at 24V. You **cannot** connect 2
 - **Dimmable** — via PWM signal to a MOSFET
 
 **How it works electrically:**
-The strip draws current from the 24V supply. The Arduino cannot supply this power — the Arduino's 5V pin can only provide ~400mA, while the strip might draw several amps. The 24V supply powers the strip directly through the MOSFET; the Arduino just tells the MOSFET how fast to switch.
+The strip draws current from the 24V supply. The ESP32 cannot supply this power — the ESP32's 3.3V pin can only provide ~400mA, while the strip might draw several amps. The 24V supply powers the strip directly through the MOSFET; the ESP32 just tells the MOSFET how fast to switch.
 
 ---
 
@@ -38,17 +42,17 @@ The strip draws current from the 24V supply. The Arduino cannot supply this powe
 
 **What it is:** A logic-level N-channel MOSFET. Acts as an electrically controlled switch that can handle high voltage and current.
 
-**Why IRLZ44N:** It's "logic-level" — fully turns on with just 5V at the gate, which the Arduino can provide directly. Other MOSFETs need 10V+ and won't work with Arduino.
+**Why IRLZ44N:** It's "logic-level" — fully turns on with just 3.3V at the gate, which the ESP32 can provide directly. Other MOSFETs need 10V+ and won't work with microcontrollers.
 
 **Key specs:**
 - **Vds (max voltage):** 55V — easily handles 24V
 - **Id (max current):** 47A — way more than the LED strip needs
-- **Vgs (gate threshold):** 1–2V — turns on fully at 5V (Arduino's output)
+- **Vgs (gate threshold):** 1–2V — turns on fully at 3.3V (ESP32's output)
 - **Rds(on) (resistance when on):** ~0.022Ω — very low, minimal heat
 
 **How it works:**
-1. Arduino sends a PWM signal (0–5V) to the Gate pin
-2. When Gate is HIGH (5V), the MOSFET conducts: current flows from Drain to Source
+1. ESP32 sends a PWM signal (0–3.3V) to the Gate pin
+2. When Gate is HIGH (3.3V), the MOSFET conducts: current flows from Drain to Source
 3. When Gate is LOW (0V), the MOSFET blocks: no current flows
 4. PWM switches this on/off thousands of times per second, creating an average voltage that dims the LED
 
@@ -67,7 +71,7 @@ The strip draws current from the 24V supply. The Arduino cannot supply this powe
 
 | Pin | Name | Connects To |
 |-----|------|------------|
-| 1 | Gate (G) | Arduino D6 (PWM) |
+| 1 | Gate (G) | ESP32 GPIO 25 (PWM) |
 | 2 | Drain (D) | LED strip − |
 | 3 | Source (S) | Common GND |
 
@@ -94,7 +98,7 @@ A relay can only do ON/OFF. A MOSFET with PWM can simulate any voltage between 0
 **How it works:**
 1. Connect 24V from the power supply to the input terminals
 2. Adjust the onboard trim pot (small screw) until the output reads 5V with a multimeter
-3. Connect output to Arduino's 5V pin
+3. Connect output to ESP32's VIN pin
 
 **Why not use a linear regulator (like 7805)?**
 A linear regulator dissipates the voltage difference as heat. Dropping 24V to 5V means dissipating 19V × current as heat. At just 100mA, that's 1.9W — hot enough to burn your finger. The LM2596 switches instead of burning, so it stays cool.
@@ -103,34 +107,42 @@ A linear regulator dissipates the voltage difference as heat. Dropping 24V to 5V
 
 ---
 
-## HC-SR501 PIR Motion Sensor
+## LD2410C mmWave Radar Sensor
 
-**What it is:** Passive Infrared sensor. Detects movement by measuring changes in infrared radiation (heat) from objects in its field of view.
+**What it is:** A 24GHz Frequency Modulated Continuous Wave (FMCW) radar sensor. Detects both moving AND stationary humans by measuring reflected radio waves.
 
-**Why HC-SR501:** Cheap (~$1), reliable, adjustable sensitivity, works at 5V.
+**Why LD2410C:** Detects presence even when you're sitting still (unlike PIR sensors which only detect motion). Not affected by light, heat, or IR sources. Configurable detection range. And most importantly — operates at 3.3V, connecting directly to the ESP32.
+
+**Key specs:**
+- **Frequency:** 24 GHz (ISM band, no license needed)
+- **Detection range:** Up to ~6m (configurable)
+- **Detection angle:** ~60–90°
+- **Interface:** UART at 256000 baud (factory default)
+- **Voltage:** 3.3V (with onboard regulator, accepts up to 5V on VCC)
+- **Current:** ~80mA typical
 
 **How it works:**
-1. A pyroelectric sensor detects infrared radiation changes
-2. A Fresnel lens focuses IR light onto the sensor (the white dome)
-3. A BISS0001 chip processes the signal
-4. Output goes HIGH (3.3V) when motion detected, LOW when no motion
+1. Emits 24GHz radio waves
+2. Waves bounce off objects and return to the antenna
+3. The frequency shift (Doppler effect) reveals motion
+4. The time delay reveals distance
+5. Internal chip processes signal and reports targets via UART
 
-**On-board adjustments:**
+**Why it's better than PIR (HC-SR501):**
+- Detects stationary people (PIR only detects motion)
+- Not affected by temperature, sunlight, or IR sources
+- Can detect through thin walls
+- Configurable sensitivity per distance gate
+- More reliable presence detection
 
-| Pot | Controls | Range |
-|-----|----------|-------|
-| Left (sensitivity) | Detection range | 3–7 meters |
-| Right (delay) | How long output stays HIGH after motion | 0.3s – 200s |
+**UART communication:**
+The sensor outputs data frames automatically. The ESP32 reads these frames to determine if someone is present, how far away they are, and whether they're moving or stationary.
 
-**For this project:** Set the right pot to minimum (fully CCW). The Arduino handles the 30-second timeout logic, which is more precise and resettable than the sensor's built-in delay.
-
-**Trigger modes (solder jumper on back):**
-- **H (Repeatable/Continuous):** Output stays HIGH as long as motion continues, then stays HIGH for the delay time after last motion.
-- **L (Single/Non-repeatable):** Output goes HIGH once when motion detected, stays HIGH for the delay time, then goes LOW.
-
-Use **H mode** — the Arduino reads the sensor continuously and manages timing itself.
-
-**Important:** The output is 3.3V, not 5V. Arduino's digital pins read >3V as HIGH, so this works fine.
+**Mounting:**
+- Antenna side (copper trace side) faces the detection area
+- Mount 2–3m high, slight downward angle
+- Leave space behind the sensor (back lobe can detect through thin walls)
+- Optional: place a metal shield behind the sensor to block back lobe detection
 
 ---
 
@@ -141,16 +153,16 @@ Use **H mode** — the Arduino reads the sensor continuously and manages timing 
 **Why:** Controls brightness. In motion mode, sets the maximum brightness. In manual mode, directly controls brightness.
 
 **How it works:**
-- Outer pin 1 → 5V
+- Outer pin 1 → 3.3V
 - Outer pin 2 → GND
-- Middle pin (wiper) → Arduino A0
+- Middle pin (wiper) → ESP32 GPIO 34
 
 As you turn the knob:
-- Fully toward 5V pin → A0 reads ~1023 → full brightness
-- Fully toward GND pin → A0 reads ~0 → off
-- Middle → A0 reads ~512 → 50% brightness
+- Fully toward 3.3V pin → GPIO 34 reads ~1023 → full brightness
+- Fully toward GND pin → GPIO 34 reads ~0 → off
+- Middle → GPIO 34 reads ~512 → 50% brightness
 
-The Arduino's `analogRead()` converts this voltage (0–5V) to a number (0–1023). `map()` then scales it to 0–255 for PWM output.
+The ESP32's `analogRead()` converts this voltage (0–3.3V) to a number (0–1023). `map()` then scales it to 0–255 for PWM output.
 
 ---
 
@@ -163,12 +175,12 @@ The Arduino's `analogRead()` converts this voltage (0–5V) to a number (0–102
 **How it works with INPUT_PULLUP:**
 
 ```
-Button leg 1 → Arduino D3
+Button leg 1 → ESP32 GPIO 27
 Button leg 2 → GND
 ```
 
-- Button **not pressed**: D3 reads HIGH (pulled up internally)
-- Button **pressed**: D3 reads LOW (connected to GND through the button)
+- Button **not pressed**: GPIO 27 reads HIGH (pulled up internally)
+- Button **pressed**: GPIO 27 reads LOW (connected to GND through the button)
 
 **Debounce:** Mechanical buttons "bounce" — when pressed, the metal contacts vibrate and create rapid HIGH/LOW transitions for a few milliseconds. The debounce code waits 50ms and re-reads the pin to confirm the press is real.
 
@@ -176,7 +188,7 @@ Button leg 2 → GND
 
 ## 24V Power Supply
 
-**What it is:** Converts mains AC power (120V/240V) to 24V DC for the LED strip and (via LM2596) the Arduino.
+**What it is:** Converts mains AC power (120V/240V) to 24V DC for the LED strip and (via LM2596) the ESP32.
 
 **Current requirement:** Check your strip's wattage. A 5-meter 24V COB strip might draw 20–40W, which at 24V is ~1–1.7A. Your supply should be rated for at least 20% more than the strip's maximum draw.
 
@@ -186,21 +198,21 @@ Button leg 2 → GND
 
 ```
 Motion detected
-    → HC-SR501 output goes HIGH (3.3V)
-        → Arduino D2 reads HIGH
-            → Arduino sets target brightness from potentiometer
-                → Arduino ramps currentBrightness toward target
-                    → Arduino outputs PWM on D6 (0-5V, varying duty cycle)
+    → LD2410C radar detects presence via UART
+        → ESP32 GPIO 16 reads data frame
+            → ESP32 sets target brightness from potentiometer
+                → ESP32 ramps currentBrightness toward target
+                    → ESP32 outputs PWM on GPIO 25 (0-3.3V, varying duty cycle)
                         → IRLZ44N Gate receives PWM signal
                             → MOSFET switches 24V circuit at PWM frequency
                                 → LED strip receives average voltage = dimmed light
 
 Button pressed
-    → Arduino D3 reads LOW
+    → ESP32 GPIO 27 reads LOW
         → Mode toggles (MOTION ↔ MANUAL)
 
 Potentiometer turned
-    → Arduino A0 reads 0–1023
+    → ESP32 GPIO 34 reads 0–1023
         → mapped to 0–255 for PWM output
             → brightness changes smoothly via fade
 ```

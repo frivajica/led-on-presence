@@ -18,7 +18,7 @@ static unsigned long lastMotionTime = 0;
 static unsigned long cooldownStartTime = 0;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   setupInputs();
   setupOutputs();
   setupRadar();
@@ -28,7 +28,6 @@ void setup() {
 }
 
 void loop() {
-  // --- Button: toggle motion enabled/disabled ---
   if (readButton()) {
     currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
 
@@ -36,11 +35,9 @@ void loop() {
     Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
   }
 
-  // --- Read inputs ---
   int potValue = readPotentiometer();
   bool presence = radarPresenceDetected();
 
-  // --- Motion state machine ---
   if (currentMode == MODE_MOTION) {
     switch (motionState) {
       case MOTION_IDLE:
@@ -69,30 +66,25 @@ void loop() {
         break;
     }
   } else {
-    // Manual mode: potentiometer directly controls on/off
     lightOn = potValue > 5;
     motionState = MOTION_IDLE;
   }
 
-  // --- Set target brightness ---
   if (lightOn) {
     targetBrightness = map(potValue, 0, 1023, 255, 0);
   } else {
     targetBrightness = 0;
   }
 
-  // --- Fade current brightness toward target ---
   if (currentBrightness < targetBrightness) {
-    currentBrightness = min(currentBrightness + FADE_STEP, targetBrightness);
+    currentBrightness = min((int)(currentBrightness + FADE_STEP), (int)targetBrightness);
   } else if (currentBrightness > targetBrightness) {
-    currentBrightness = max(currentBrightness - FADE_STEP, targetBrightness);
+    currentBrightness = max((int)(currentBrightness - FADE_STEP), (int)targetBrightness);
   }
 
-  // --- Apply brightness ---
   setBrightness(PIN_MOSFET, currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
 
-  // --- Debug output ---
   static unsigned long lastPrint = 0;
   if (millis() - lastPrint > 500) {
     lastPrint = millis();

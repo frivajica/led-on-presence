@@ -43,7 +43,7 @@ Each row of 10 holes (a–j) is connected across the center divider:
     a   b   c   d   e   │   f   g   h   i   j
     ○───○───○───○───○───┼───○───○───○───○───○     ← Row 1: all 10 connected
     ○───○───○───○───○───┼───○───○───○───○───○     ← Row 2: all 10 connected
-    ○───○───○───○───○───┼───○───○─○─○───○───○     ← Row 3: all 10 connected
+    ○───○───○───○───○───┼───○───○───○───○───○     ← Row 3: all 10 connected
 ```
 
 **Important:** On your breadboard, **both halves are connected across the center divider**. So `a1` and `f1` are electrically the same point. This is different from some breadboards where the center divides the connections.
@@ -68,7 +68,7 @@ The long strips along the sides run the full height of the board:
        All − holes connected                  All − holes connected
 ```
 
-The `+` rail is for 5V power. The `−` rail is for GND. You only need to connect power to these rails once — every hole along that rail is then available.
+The `+` rail is for power. The `−` rail is for GND. You only need to connect power to these rails once — every hole along that rail is then available.
 
 ### Center Divider (Connected Across)
 
@@ -96,33 +96,38 @@ Breadboard holes are referenced by letter + number:
 
 ---
 
-## Pin Names on the Arduino
+## Pin Names on the ESP32
 
-The docs use "D3", "D6", etc., but your physical Arduino board just shows **bare numbers**:
+The ESP32 DevKit V1 shows **GPIO numbers** directly on the board:
 
 ```
 Code says:          Board shows:
-  D3          →        3
-  D6          →        6
-  D10         →        10
-  D11         →        11
-  A0          →       A0
+  GPIO 25      →        25
+  GPIO 27      →        27
+  GPIO 16      →        16
+  GPIO 17      →        17
+  GPIO 34      →        34
+  GPIO 2       →        2  (built-in blue LED)
 ```
 
-The "D" means **digital** (pins 0–13). The "A" means **analog** (pins A0–A5). The board doesn't print the prefix — just the number.
-
-Pins with a **~** symbol next to them (3, 5, 6, 9, 10, 11) are PWM-capable — they can do dimming, not just ON/OFF.
+**Key differences from Arduino Uno:**
+- All digital pins can do PWM (via LEDC) — no "~" marking needed
+- GPIO 34–39 are input-only (can read but not write)
+- GPIO 6–11 are reserved for flash — never use these
+- Logic is 3.3V, not 5V (but this project works perfectly since LD2410C is also 3.3V)
 
 ---
 
 ## Breadboard Layout for This Project
 
-Here's where every component goes. The Arduino sits to the left of the breadboard, and components are arranged in rows 1–10.
+Here's where every component goes. The ESP32 sits to the left of the breadboard, and components are arranged in rows 1–10.
+
+**Major simplification vs. Arduino Uno:** No voltage divider needed for the LD2410C. The radar sensor connects directly to the ESP32.
 
 ```
-            ARDUINO UNO
+            ESP32 DEVKIT V1
    ┌──────────────────────────────┐
-   │  6    3   11   10  A0  5V GND│
+   │ 25   27   17   16  34 3V3 GND│
    │  ○    ○    ○    ○    ○   ○  │
    └──┼────┼────┼────┼────┼───┼──┘
       │    │    │    │    │   │
@@ -145,14 +150,14 @@ Here's where every component goes. The Arduino sits to the left of the breadboar
     ○ ┤    │    │    │    │   │    ┤ ○
     ○ ┤    │    │    │    │   │    ┤ ○
     ○ ┤  ┌─┼────┼────┼────┼───┼──┐ ┤ ○
-    ○ ┤  │a│b  c│d  e│f  g│h  i│j│ ┤ ○  Row 1  ← POT Left (5V)
-    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 2  ← POT Middle (A0)
+    ○ ┤  │a│b  c│d  e│f  g│h  i│j│ ┤ ○  Row 1  ← POT Left (3.3V)
+    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 2  ← POT Middle (GPIO 34)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 3  ← POT Right (GND)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 4
-    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 5  ← Button Leg A (D3)
+    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 5  ← Button Leg A (GPIO 27)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 6  ← Button Leg B (GND)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 7
-    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 8  ← MOSFET Gate (D6)
+    ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 8  ← MOSFET Gate (GPIO 25)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 9  ← MOSFET Drain (LED−)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○  Row 10 ← MOSFET Source (GND)
     ○ ┤  │○│○  ○│○  ○│○  ○│○  ○│○│ ┤ ○
@@ -172,25 +177,25 @@ Here's where every component goes. The Arduino sits to the left of the breadboar
 
 ### Step 1: Power Rails
 
-Connect Arduino power to the breadboard rails. Use the **left-side rails** (closest to the Arduino):
+Connect ESP32 power to the breadboard rails. Use the **left-side rails** (closest to the ESP32):
 
 ```
-Arduino 5V  ──────────────→  + rail (left side, any row)
-Arduino GND ──────────────→  − rail (left side, any row)
+ESP32 3V3  ──────────────→  + rail (left side, any row)
+ESP32 GND ──────────────→  − rail (left side, any row)
 ```
 
 On the breadboard:
 
 ```
    +− rail
-    ○ ← Jumper from Arduino 5V
+    ○ ← Jumper from ESP32 3V3
     ○
     ○
-    ○ ← Jumper from Arduino GND
+    ○ ← Jumper from ESP32 GND
     ○
 ```
 
-Now every `+` hole on the left side has 5V and every `−` hole has GND. The right-side rails are also available if you need power on that side.
+Now every `+` hole on the left side has 3.3V and every `−` hole has GND. The right-side rails are also available if you need power on that side.
 
 ---
 
@@ -200,17 +205,17 @@ The potentiometer has 3 pins. Plug it into rows 1–3 on the left side (a–e):
 
 ```
     a  b  c  d  e
-    ○  ○  ○  ○  ○  ← Row 1: Left pin → + rail (5V)
-    ○  ○  ○  ○  ○  ← Row 2: Middle pin → Arduino A0
+    ○  ○  ○  ○  ○  ← Row 1: Left pin → + rail (3.3V)
+    ○  ○  ○  ○  ○  ← Row 2: Middle pin → ESP32 GPIO 34
     ○  ○  ○  ○  ○  ← Row 3: Right pin → − rail (GND)
 ```
 
 Wiring:
 
 ```
-    + rail (5V)  ────→  Row 1 (any hole a1–e1)
-    Arduino pin A0 ──→  Row 2 (any hole a2–e2)
-    − rail (GND) ────→  Row 3 (any hole a3–e3)
+    + rail (3.3V) ────→  Row 1 (any hole a1–e1)
+    ESP32 GPIO 34 ────→  Row 2 (any hole a2–e2)
+    − rail (GND)  ────→  Row 3 (any hole a3–e3)
 ```
 
 ---
@@ -235,22 +240,22 @@ Your button has **4 pins** in a square pattern. Internally, opposite corners are
 **It doesn't matter which way you orient the button.** No matter how you plug it in, the wiring is the same:
 
 1. Place the button so it **straddles Row 5 and Row 6** (two pins in each row)
-2. Connect Arduino pin **3** to **any hole in Row 5**
+2. Connect ESP32 pin **GPIO 27** to **any hole in Row 5**
 3. Connect GND to **any hole in Row 6**
 
 When you press the button, Row 5 connects to Row 6 → circuit closes.
 
 ```
     a  b  c  d  e
-    ○  ○  ○  ○  ○  ← Row 5: 2 button pins → Arduino pin 3
+    ○  ○  ○  ○  ○  ← Row 5: 2 button pins → ESP32 GPIO 27
     ○  ○  ○  ○  ○  ← Row 6: 2 button pins → − rail (GND)
 ```
 
 Wiring:
 
 ```
-    Arduino pin 3  ────→  Row 5 (any hole a5–e5)
-    − rail (GND)  ────→  Row 6 (any hole a6–e6)
+    ESP32 GPIO 27 ────→  Row 5 (any hole a5–e5)
+    − rail (GND)   ────→  Row 6 (any hole a6–e6)
 ```
 
 ---
@@ -261,7 +266,7 @@ The IRLZ44N has 3 pins in a row. Plug it into rows 8–10. **Important:** The fl
 
 ```
     a  b  c  d  e
-    ○  ○  ○  ○  ○  ← Row 8:  Gate (pin 1) → Arduino pin 6
+    ○  ○  ○  ○  ○  ← Row 8:  Gate (pin 1) → ESP32 GPIO 25
     ○  ○  ○  ○  ○  ← Row 9:  Drain (pin 2) → LED strip −
     ○  ○  ○  ○  ○  ← Row 10: Source (pin 3) → − rail (GND)
 ```
@@ -269,18 +274,20 @@ The IRLZ44N has 3 pins in a row. Plug it into rows 8–10. **Important:** The fl
 Wiring:
 
 ```
-    Arduino pin 6  ────→  Row 8  (any hole a8–e8)
+    ESP32 GPIO 25 ────→  Row 8  (any hole a8–e8)
     LED strip −   ────→  Row 9  (any hole a9–e9)
     − rail (GND)  ────→  Row 10 (any hole a10–e10)
 ```
 
-**Note:** The LED strip wires (24V circuit) should connect on the **right side** (f–j) of row 9, and the Arduino wires on the **left side** (a–e). This keeps high voltage separated from low voltage.
+**Note:** The LED strip wires (24V circuit) should connect on the **right side** (f–j) of row 9, and the ESP32 wires on the **left side** (a–e). This keeps high voltage separated from low voltage.
 
 ---
 
 ### Step 5: LD2410C Radar Sensor (Off-board)
 
-The LD2410C has 5 pins but we only use 4 (VCC, TX, RX, GND). Use male-to-female jumper wires:
+The LD2410C has 5 pins but we only use 4 (VCC, TX, RX, GND). Use male-to-female jumper wires.
+
+**No voltage divider needed** — both ESP32 and LD2410C are 3.3V. Connect directly.
 
 ```
     LD2410C Radar Sensor        Breadboard
@@ -292,32 +299,10 @@ The LD2410C has 5 pins but we only use 4 (VCC, TX, RX, GND). Use male-to-female 
        VCC TX  RX  OUT GND
 
     Wires:
-    VCC ──→ + rail (5V)
-    TX  ──→ Arduino pin 10
-    RX  ──→ Arduino pin 11 (via voltage divider!)
+    VCC ──→ + rail (3.3V or 5V)
+    TX  ──→ ESP32 GPIO 16 (UART2 RX) — direct connection!
+    RX  ──→ ESP32 GPIO 17 (UART2 TX) — direct connection!
     GND ──→ − rail (GND)
-```
-
-**Voltage divider on RX line** (required!):
-
-The LD2410C RX pin is 3.3V. You need to drop Arduino's 5V:
-
-```
-Arduino pin 11 ──[1kΩ]──┬──[2kΩ]── − rail (GND)
-                         └──→ LD2410C RX pin
-```
-
-Use two resistors on the breadboard:
-1. Plug a 1kΩ resistor between row 12 (any hole) and row 13
-2. Plug a 2kΩ resistor between row 13 and − rail
-3. Connect Arduino pin 11 to row 12
-4. Connect LD2410C RX wire to row 13
-
-```
-    a  b  c  d  e
-    ○  ○  ○  ○  ○  ← Row 12: Arduino pin 11 → 1kΩ resistor
-    ○  ○  ○  ○  ○  ← Row 13: 1kΩ → 2kΩ junction → LD2410C RX
-    ○  ○  ○  ○  ○  ← Row 14
 ```
 
 **Mounting:** Place the LD2410C with the antenna side (copper trace) facing the room. The sensor can sit on the breadboard or hang off the edge on its jumper wires.
@@ -336,12 +321,12 @@ The LM2596 is a separate module. Use jumper wires:
     └──────────────────────┘
          │     │     │     │
          │     │     │     └──→ − rail (GND)
-         │     │     └────────→ + rail (5V)  [after adjusting to 5V!]
+         │     │     └────────→ ESP32 VIN  [after adjusting to 5V!]
          │     └──────────────→ 24V Supply −
          └────────────────────→ 24V Supply +
 ```
 
-**Before connecting OUT+ to the breadboard:** Adjust the trim pot until a multimeter reads 5.0V between OUT+ and OUT−.
+**Before connecting OUT+ to the ESP32:** Adjust the trim pot until a multimeter reads 5.0V between OUT+ and OUT−.
 
 ---
 
@@ -362,9 +347,9 @@ The LED strip connects to the 24V circuit through the MOSFET:
 Here's the full layout with all wires:
 
 ```
-         ARDUINO UNO
+         ESP32 DEVKIT V1
     ┌─────────────────────────┐
-    │ 6      3   11   10   A0 5V GND│
+    │ 25     27   17   16   34 3V3 GND│
     │ ○      ○    ○    ○    ○  ○  ○ │
     └──┼──────┼────┼────┼──┼──┼┘
        │     │     │     │   │  │
@@ -379,19 +364,19 @@ Here's the full layout with all wires:
      ○─┤     │     │     │   │  ├─○
      ○─┤     │     │     │   │  ├─○
      ○─┤ ┌───┼─────┼─────┼───┼──┤─○
-     ○─┤ │a1 ○  b1 ○  c1 ○  d1 ○  e1│ │  f1 ○  g1 ○  h1 ○  i1 ○  j1 ○│ ├─○ Row 1  ← POT Left (5V)
-     ○─┤ │a2 ○  b2 ○  c2 ○  d2 ○  e2│ │  f2 ○  g2 ○  h2 ○  i2 ○  j2 ○│ ├─○ Row 2  ← POT Middle (A0)
+     ○─┤ │a1 ○  b1 ○  c1 ○  d1 ○  e1│ │  f1 ○  g1 ○  h1 ○  i1 ○  j1 ○│ ├─○ Row 1  ← POT Left (3.3V)
+     ○─┤ │a2 ○  b2 ○  c2 ○  d2 ○  e2│ │  f2 ○  g2 ○  h2 ○  i2 ○  j2 ○│ ├─○ Row 2  ← POT Middle (GPIO 34)
      ○─┤ │a3 ○  b3 ○  c3 ○  d3 ○  e3│ │  f3 ○  g3 ○  h3 ○  i3 ○  j3 ○│ ├─○ Row 3  ← POT Right (GND)
      ○─┤ │a4 ○  b4 ○  c4 ○  d4 ○  e4│ │  f4 ○  g4 ○  h4 ○  i4 ○  j4 ○│ ├─○ Row 4
-     ○─┤ │a5 ○  b5 ○  c5 ○  d5 ○  e5│ │  f5 ○  g5 ○  h5 ○  i5 ○  j5 ○│ ├─○ Row 5  ← Button A (pin 3)
+     ○─┤ │a5 ○  b5 ○  c5 ○  d5 ○  e5│ │  f5 ○  g5 ○  h5 ○  i5 ○  j5 ○│ ├─○ Row 5  ← Button A (GPIO 27)
      ○─┤ │a6 ○  b6 ○  c6 ○  d6 ○  e6│ │  f6 ○  g6 ○  h6 ○  i6 ○  j6 ○│ ├─○ Row 6  ← Button B (GND)
      ○─┤ │a7 ○  b7 ○  c7 ○  d7 ○  e7│ │  f7 ○  g7 ○  h7 ○  i7 ○  j7 ○│ ├─○ Row 7
-     ○─┤ │a8 ○  b8 ○  c8 ○  d8 ○  e8│ │  f8 ○  g8 ○  h8 ○  i8 ○  j8 ○│ ├─○ Row 8  ← MOSFET Gate (pin 6)
+     ○─┤ │a8 ○  b8 ○  c8 ○  d8 ○  e8│ │  f8 ○  g8 ○  h8 ○  i8 ○  j8 ○│ ├─○ Row 8  ← MOSFET Gate (GPIO 25)
      ○─┤ │a9 ○  b9 ○  c9 ○  d9 ○  e9│ │  f9 ○  g9 ○  h9 ○  i9 ○  j9 ○│ ├─○ Row 9  ← MOSFET Drain (LED−)
      ○─┤ │a10○  b10○  c10○  d10○  e10│ │ f10○  g10○  h10○  i10○  j10○ │ ├─○ Row 10 ← MOSFET Source (GND)
-     ○─┤ │a11○  b11○  c11○  d11○  e11│ │ f11○  g11○  h11○  i11○  j11○ │ ├─○ Row 11
-     ○─┤ │a12○  b12○  c12○  d12○  e12│ │ f12○  g12○  h12○  i12○  j12○ │ ├─○ Row 12 ← Voltage divider (1kΩ)
-     ○─┤ │a13○  b13○  c13○  d13○  e13│ │ f13○  g13○  h13○  i13○  j13○ │ ├─○ Row 13 ← Voltage divider (2kΩ junction)
+     ○─┤ │a11○  b11○  c11○  d11○  e11│ │ f11○  g11○  h11○  i11○  j11○ │ ├─○
+     ○─┤ │a12○  b12○  c12○  d12○  e12│ │ f12○  g12○  h12○  i12○  j12○ │ ├─○
+     ○─┤ │a13○  b13○  c13○  d13○  e13│ │ f13○  g13○  h13○  i13○  j13○ │ ├─○
      ○─┤ └───┼─────┼─────┼───┼──┘ ├─○
      ○─┤     │     │     │   │  ├─○
      ...    ...                       ...
@@ -407,22 +392,21 @@ Here's the full layout with all wires:
 
 | From | To | Wire Color (suggested) |
 |------|----|----------------------|
-| Arduino 5V | + rail (left side) | Red |
-| Arduino GND | − rail (left side) | Black |
+| ESP32 3V3 | + rail (left side) | Red |
+| ESP32 GND | − rail (left side) | Black |
 | + rail | Pot left pin (row 1, left side) | Red |
-| Arduino A0 | Pot middle pin (row 2, left side) | Yellow |
+| ESP32 GPIO 34 | Pot middle pin (row 2, left side) | Yellow |
 | − rail | Pot right pin (row 3, left side) | Black |
-| Arduino pin 3 | Button leg A (row 5, left side) | White |
+| ESP32 GPIO 27 | Button leg A (row 5, left side) | White |
 | − rail | Button leg B (row 6, left side) | Black |
-| Arduino pin 6 | MOSFET Gate, row 8 (left side) | Green |
+| ESP32 GPIO 25 | MOSFET Gate, row 8 (left side) | Green |
 | LED strip − | MOSFET Drain, row 9 (right side) | Black (thick) |
 | − rail | MOSFET Source, row 10 (left side) | Black |
 | + rail | LD2410C VCC | Red |
-| Arduino pin 10 | LD2410C TX | White |
-| Arduino pin 11 | Voltage divider (row 12) | Blue |
-| Voltage divider (row 13) | LD2410C RX | Blue |
+| ESP32 GPIO 16 | LD2410C TX | White |
+| ESP32 GPIO 17 | LD2410C RX | White |
 | − rail | LD2410C GND | Black |
-| LM2596 OUT+ | + rail | Red (after adjusting to 5V) |
+| LM2596 OUT+ | ESP32 VIN | Red (after adjusting to 5V) |
 | LM2596 OUT− | − rail | Black |
 | 24V Supply + | LM2596 IN+ and LED strip + | Red (thick) |
 | 24V Supply − | LM2596 IN− and − rail | Black (thick) |
@@ -449,7 +433,7 @@ Every wire must go somewhere. A wire connected only on one side is "floating" an
 
 ```
     WRONG:                          RIGHT:
-    Arduino pin 6 ──→ ○  (nowhere)  Arduino pin 6 ──→ ○ ← MOSFET Gate row
+    ESP32 GPIO 25 ──→ ○  (nowhere)  ESP32 GPIO 25 ──→ ○ ← MOSFET Gate row
 ```
 
 ### 3. Power and Ground Short
@@ -465,14 +449,14 @@ Always double-check before plugging in power.
 
 ### 4. Mixing High and Low Voltage
 
-Keep 24V wires on the right side (f–j) and 5V wires on the left side (a–e):
+Keep 24V wires on the right side (f–j) and 3.3V/5V wires on the left side (a–e):
 
 ```
     GOOD:                          BAD:
-    Left (5V)  │  Right (24V)      5V and 24V wires
+    Left (3.3V) │  Right (24V)     3.3V and 24V wires
     a  b  c  d  e│f  g  h  i  j    mixed in same rows
     ○  ○  ○  ○  ○│○  ○  ○  ○  ○    ○ ○ 24V ○ ○
-    ○  ○  ○  ○  ○│○  ○  ○  ○  ○    ○ ○  5V  ○ ○  ← RISK!
+    ○  ○  ○  ○  ○│○  ○  ○  ○  ○    ○ ○ 3.3V ○ ○  ← RISK!
                  │
 ```
 
@@ -496,16 +480,15 @@ The IRLZ44N pinout is Gate–Drain–Source (left to right when flat face faces 
 
 | Color | Use |
 |-------|-----|
-| Red | 5V power |
+| Red | Power (3.3V or 5V) |
 | Black | GND |
 | Yellow | Analog signals (potentiometer) |
-| White | Digital inputs (motion sensor, button) |
+| White | Digital inputs (button, radar) |
 | Green | Digital outputs (MOSFET gate) |
-| Blue | Reserved for future use |
 
 ### Use Both Rail Sets
 
-Your breadboard has power rails on both sides. Connect them together if you need 5V or GND available on both sides:
+Your breadboard has power rails on both sides. Connect them together if you need 3.3V or GND available on both sides:
 
 ```
     Left + rail ────────○────── Right + rail
@@ -520,7 +503,7 @@ Long wires create clutter and can pick up noise. Route wires directly from point
 
 ### One Wire Per Hole
 
-Each hole can only hold one wire. If you need to split a signal (e.g., 5V to both pot and sensor), use the power rail as a distribution point.
+Each hole can only hold one wire. If you need to split a signal (e.g., 3.3V to both pot and sensor), use the power rail as a distribution point.
 
 ### Using Bare Wire (Alambre)
 
@@ -537,8 +520,8 @@ If you're out of jumper wires, bare brass or copper wire works for short jumps:
 Before connecting the 24V supply:
 
 1. **Build the 5V side only** — potentiometer, button, LD2410C radar, MOSFET Gate
-2. **Connect USB** to Arduino
-3. **Open serial monitor** (`pio device monitor`)
+2. **Connect USB** to ESP32
+3. **Open serial monitor** (`pio device monitor` — 115200 baud)
 4. **Test each input:**
    - Turn pot → `Pot:` value should change
    - Walk in front of sensor → `Pres:` should show `Y` with distance

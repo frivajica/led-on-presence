@@ -4,6 +4,8 @@
 
 Arduino is a small, cheap computer designed for controlling electronics. Unlike your Mac, it has no screen, no keyboard, and no operating system. It runs one program (called a "sketch") in a never-ending loop.
 
+This project uses an ESP32 (ESP-WROOM-32 DevKit), which is Arduino-compatible — it uses the same programming language and tools, but is much more powerful.
+
 Think of it as a very simple server that:
 1. Runs `setup()` once at startup
 2. Then runs `loop()` forever, ~10,000 times per second
@@ -16,66 +18,73 @@ Power On → setup() → loop() → loop() → loop() → ... (forever)
 
 ## Hardware: The Board
 
-An Arduino Uno has:
+An ESP32 DevKit V1 has:
 
 | Feature | Spec | Web Equivalent |
 |---------|------|----------------|
-| CPU | ATmega328P, 16 MHz | Very slow laptop |
-| RAM | 2 KB | A tiny `ArrayBuffer` |
-| Flash | 32 KB | Your code storage (like disk) |
-| Digital pins | 14 (D0–D13) | GPIO pins |
-| Analog pins | 6 (A0–A5) | ADC pins (read voltages) |
-| PWM pins | 6 (3,5,6,9,10,11) | DAC pins (variable output) |
-| USB | Type B | Programming + power |
-| Voltage | 5V logic | ⚠️ NOT 3.3V, NOT 12V, NOT 24V |
+| CPU | Dual-core Xtensa, 240 MHz | Slow laptop |
+| RAM | 520 KB | A small `ArrayBuffer` |
+| Flash | 4 MB | Your code storage (like disk) |
+| Digital pins | 34 (GPIO 0–39) | GPIO pins |
+| Analog pins | 18 (GPIO 0–39) | ADC pins (read voltages) |
+| PWM | All digital pins (via LEDC) | DAC pins (variable output) |
+| UART | 3 hardware serial ports | Serial interfaces |
+| USB | Type-C or Micro-USB | Programming + power |
+| Voltage | 3.3V logic | ⚠️ NOT 5V, NOT 12V, NOT 24V |
 
-**Critical rule:** Never connect more than 5V to any Arduino pin. It will destroy the chip.
+**Critical rule:** Never connect more than 3.3V to any ESP32 GPIO pin. It will destroy the chip.
+
+**Difference from Arduino Uno:** The Uno uses 5V logic. The ESP32 uses 3.3V. This is actually better for this project because the LD2410C radar is also 3.3V — no voltage conversion needed.
 
 ---
 
 ## Digital vs Analog Pins
 
-### Digital Pins (D0–D13)
+### Digital Pins (GPIO 0–39)
 
-Read or write `HIGH` (5V) or `LOW` (0V). Binary — on or off.
+Read or write `HIGH` (3.3V) or `LOW` (0V). Binary — on or off.
 
 ```cpp
-pinMode(13, OUTPUT);          // Configure pin 13 as output
-digitalWrite(13, HIGH);       // Set pin 13 to 5V (LED on)
-digitalWrite(13, LOW);        // Set pin 13 to 0V (LED off)
-int val = digitalRead(2);     // Read pin 2: returns HIGH or LOW
+ pinMode(2, OUTPUT);           // Configure GPIO 2 as output
+ digitalWrite(2, HIGH);        // Set GPIO 2 to 3.3V (LED on)
+ digitalWrite(2, LOW);         // Set GPIO 2 to 0V (LED off)
+ int val = digitalRead(27);    // Read GPIO 27: returns HIGH or LOW
 ```
 
 **Web analogy:** `digitalWrite(pin, HIGH)` is like `element.classList.add('active')`.
 
-### Analog Pins (A0–A5)
+**ESP32 note:** GPIO 6–11 are reserved for flash memory — never use these pins. GPIO 34–39 are input-only (can read but not write).
 
-Read voltages 0–5V as numbers 0–1023 (10-bit ADC).
+### Analog Pins (GPIO 0–39)
+
+Read voltages 0–3.3V as numbers 0–4095 (12-bit ADC by default).
 
 ```cpp
-int value = analogRead(A0);   // Returns 0–1023
+int value = analogRead(34);    // Returns 0–4095
 ```
 
 **How ADC works:**
 - 0V → returns 0
-- 2.5V → returns ~512
-- 5V → returns 1023
+- 1.65V → returns ~2048
+- 3.3V → returns 4095
 
-**Web analogy:** `analogRead(A0)` is like `event.clientX` — a continuous value, not binary.
+**Web analogy:** `analogRead(34)` is like `event.clientX` — a continuous value, not binary.
 
-### PWM Output (Special Digital Pins)
+**Note:** This project uses `analogReadResolution(10)` to match the Arduino Uno's 0–1023 range.
 
-Some digital pins (3, 5, 6, 9, 10, 11) can output PWM — rapid on/off switching that simulates analog voltage:
+### PWM Output (All Digital Pins)
+
+On the ESP32, all digital pins can output PWM via LEDC (LED Control) channels:
 
 ```cpp
-analogWrite(6, 0);     // 0% duty cycle → 0V average → LED off
-analogWrite(6, 127);   // 50% duty cycle → ~2.5V average → half brightness
-analogWrite(6, 255);   // 100% duty cycle → 5V average → full brightness
+analogWrite(25, 0);     // 0% duty cycle → 0V average → LED off
+analogWrite(25, 127);   // 50% duty cycle → ~1.65V average → half brightness
+analogWrite(25, 255);   // 100% duty cycle → 3.3V average → full brightness
 ```
 
-PWM is how you do dimming, motor speed control, etc. The Arduino switches the pin on and off ~490 times per second. Your eyes perceive the average as brightness.
+PWM is how you do dimming, motor speed control, etc. The ESP32 switches the pin on and off ~490 times per second. Your eyes perceive the average as brightness.
 
-**This project uses PWM** on pin 6 to control the IRLZ44N MOSFET, which switches the 24V LED strip.
+**This project uses PWM** on GPIO 25 to control the IRLZ44N MOSFET, which switches the 24V LED strip.
 
 **Note:** `analogWrite()` is NOT `analogRead()`. One outputs a signal, the other reads one.
 
@@ -93,7 +102,7 @@ pinMode(pin, OUTPUT);       // Send a signal
 
 **What's INPUT_PULLUP?**
 
-Without a pull-up resistor, a disconnected pin "floats" — it reads random HIGH/LOW values. A pull-up resistor connects the pin to 5V through a large resistor (~20kΩ), so:
+Without a pull-up resistor, a disconnected pin "floats" — it reads random HIGH/LOW values. A pull-up resistor connects the pin to 3.3V through a large resistor (~45kΩ on ESP32), so:
 - Nothing connected → pin reads HIGH (pulled up)
 - Connected to GND → pin reads LOW (overpowering the pull-up)
 
@@ -103,21 +112,21 @@ This is why our button uses `INPUT_PULLUP` — one leg to the pin, other leg to 
 
 ## Voltage Levels — The Most Important Concept
 
-| Voltage | Arduino Pin | Meaning |
-|---------|------------|---------|
+| Voltage | ESP32 Pin | Meaning |
+|---------|----------|---------|
 | 0V | GND | Ground (reference point) |
-| 0–1.5V | Digital | Reads as LOW |
-| 1.5–5V | Digital | Reads as HIGH |
-| 0–5V | Analog A0–A5 | Maps to 0–1023 |
-| >5V | Any pin | **DAMAGE** — don't do this |
+| 0–1.0V | Digital | Reads as LOW |
+| 1.0–3.3V | Digital | Reads as HIGH |
+| 0–3.3V | Analog GPIO | Maps to 0–4095 |
+| >3.3V | Any GPIO pin | **DAMAGE** — don't do this |
 
 **Why the MOSFET matters:**
 
 ```
-Arduino (5V world) ──→ MOSFET Gate ──→ MOSFET switches ──→ LED Strip (24V world)
+ESP32 (3.3V world) ──→ MOSFET Gate ──→ MOSFET switches ──→ LED Strip (24V world)
 ```
 
-The MOSFET is like a drawbridge between two countries with different rules. The Arduino sends a low-power 5V signal to the Gate. The MOSFET uses that signal to switch the high-power 24V circuit. The two sides share a common ground but the MOSFET controls the flow.
+The MOSFET is like a drawbridge between two countries with different rules. The ESP32 sends a low-power 3.3V signal to the Gate. The MOSFET uses that signal to switch the high-power 24V circuit. The two sides share a common ground but the MOSFET controls the flow.
 
 ---
 
@@ -127,16 +136,16 @@ The MOSFET is like a drawbridge between two countries with different rules. The 
 void setup() {
   // Runs ONCE at startup
   // Configure pins, start serial, initialize
-  pinMode(13, OUTPUT);
-  Serial.begin(9600);
+  pinMode(2, OUTPUT);
+  Serial.begin(115200);
 }
 
 void loop() {
   // Runs forever, repeating
   // Main logic goes here
-  digitalWrite(13, HIGH);
+  digitalWrite(2, HIGH);
   delay(1000);
-  digitalWrite(13, LOW);
+  digitalWrite(2, LOW);
   delay(1000);
 }
 ```
@@ -152,7 +161,7 @@ The loop doesn't "know" it's looping — each call is independent. You use globa
 ## Serial Communication — Your Debug Console
 
 ```cpp
-Serial.begin(9600);              // Start communication
+Serial.begin(115200);            // Start communication
 Serial.println("Hello");         // Print text + newline
 Serial.println(42);              // Print number
 Serial.println(variable);        // Print variable value
@@ -163,17 +172,17 @@ Open the serial monitor in PlatformIO:
 pio device monitor
 ```
 
-This shows what your Arduino is "saying." It's your `console.log()` — invaluable for debugging.
+This shows what your ESP32 is "saying." It's your `console.log()` — invaluable for debugging.
 
-**Baud rate:** 9600 means 9600 bits per second. Both Arduino and monitor must use the same speed. 9600 is slow but reliable.
+**Baud rate:** 115200 means 115200 bits per second. Both ESP32 and monitor must use the same speed. 115200 is faster and still reliable.
 
 ---
 
 ## `#define` vs `const` vs `static`
 
 ```cpp
-#define PIN_BUTTON 3        // Preprocessor macro — text replacement at compile time
-const int PIN_BUTTON = 3;   // Typed constant — compiler checks types
+#define PIN_BUTTON 27       // Preprocessor macro — text replacement at compile time
+const int PIN_BUTTON = 27;  // Typed constant — compiler checks types
 static int count = 0;       // Persistent variable — survives between function calls
 ```
 
@@ -195,9 +204,9 @@ Unlike JavaScript, there's no garbage collector. You manage memory manually:
 - **Global variables:** Exist for the entire program lifetime. Use sparingly.
 - **Local variables:** Created when a function is called, destroyed when it returns.
 - **`static` variables:** Like local, but persist between calls. Use for state that a function needs to remember.
-- **`F()` macro:** Stores string literals in flash (32 KB) instead of RAM (2 KB). Always use for `Serial.println()`.
+- **`F()` macro:** Stores string literals in flash instead of RAM. Good practice even on ESP32 (which has plenty of RAM).
 
-**The Uno has 2 KB of RAM.** That's tiny. A single `String` object can eat 100+ bytes. Prefer `char[]` arrays and `F()` for strings.
+**The ESP32 has 520 KB of RAM.** That's plenty for this project. No need to worry about memory like you would on an Arduino Uno (2KB).
 
 ---
 
@@ -221,7 +230,7 @@ void loop() {
 
 ### 2. No Dynamic Memory Allocation (Avoid It)
 
-Don't use `new`, `malloc()`, or `String` in production Arduino code. The heap is tiny and will fragment.
+Don't use `new`, `malloc()`, or `String` in production Arduino code. The heap can fragment.
 
 ### 3. No Error Handling
 
@@ -239,9 +248,9 @@ lib_deps =
     arduino-libname/LibraryName
 ```
 
-### 5. `int` is 16-bit
+### 5. `int` is 32-bit on ESP32
 
-On Arduino Uno, `int` is 16 bits (-32768 to 32767). On your Mac, `int` is 32 bits. Use `long` (32-bit) or `unsigned long` (32-bit unsigned) for larger numbers.
+On ESP32, `int` is 32 bits (same as your Mac). On Arduino Uno, `int` is only 16 bits. This project works on both, but it's good to know the difference.
 
 ### 6. `unsigned long` for Time
 
@@ -266,13 +275,13 @@ Compiles your code. Like `npm run build`.
 ```bash
 pio run -t upload
 ```
-Compiles + uploads to the Arduino via USB. Like `npm run deploy`.
+Compiles + uploads to the ESP32 via USB. Like `npm run deploy`.
 
 ### Monitor
 ```bash
 pio device monitor
 ```
-Shows serial output from the Arduino. Like opening Chrome DevTools console.
+Shows serial output from the ESP32. Like opening Chrome DevTools console.
 
 ### All in One
 ```bash
@@ -283,18 +292,18 @@ pio run -t upload && pio device monitor
 
 ## What Happens When Power is Lost?
 
-Arduino has no persistent storage for variables. When you unplug it:
+ESP32 has no persistent storage for variables. When you unplug it:
 - All variables reset to their initial values
 - `setup()` runs again from scratch
 - `loop()` starts over
 
-This is like a server that restarts on every request — your state is gone unless you explicitly save it (e.g., to EEPROM).
+This is like a server that restarts on every request — your state is gone unless you explicitly save it (e.g., to EEPROM or flash storage).
 
 ---
 
 ## Resources
 
 - [Arduino Language Reference](https://www.arduino.cc/reference/en/) — all functions documented
+- [ESP32 Arduino Documentation](https://docs.espressif.com/projects/arduino-esp32/) — ESP32-specific docs
 - [PlatformIO Documentation](https://docs.platformio.org/) — build system docs
 - [Arduino Reddit](https://reddit.com/r/arduino) — community help
-- [Arduino Starter Kit](https://store.arduino.cc/arduino-starter-kit) — if you want more components

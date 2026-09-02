@@ -3,19 +3,19 @@
 
 #include <Arduino.h>
 
-// --- Pin Definitions ---
-#define PIN_POTENTIOMETER  A0   // Potentiometer wiper (analog input)
-#define PIN_BUTTON         3    // Mode toggle button (digital input, uses INPUT_PULLUP)
-#define PIN_MOSFET         6    // IRLZ44N Gate — PWM output to LED strip
-#define PIN_MODE_LED       13   // Built-in LED — indicates current mode
+// --- Pin Definitions (ESP32 DevKit V1) ---
+#define PIN_POTENTIOMETER  34   // Potentiometer wiper (ADC1, input-only)
+#define PIN_BUTTON         27   // Mode toggle button (digital input, uses INPUT_PULLUP)
+#define PIN_MOSFET         25   // IRLZ44N Gate — PWM output to LED strip
+#define PIN_MODE_LED        2   // Built-in blue LED — indicates current mode
 
-// --- LD2410C Radar Sensor ---
-#define PIN_RADAR_RX       10   // LD2410C TX → Arduino RX (SoftwareSerial)
-#define PIN_RADAR_TX       11   // LD2410C RX ← Arduino TX (via voltage divider)
-#define RADAR_BAUD_RATE    38400
-#define RADAR_INIT_BAUD    256000
-#define RADAR_MAX_GATE     5    // 5 × 75cm = 450cm ≈ 4m detection range
-#define RADAR_NO_ONE_WINDOW 5   // seconds before sensor reports "no one"
+// --- LD2410C Radar Sensor (HardwareSerial2) ---
+#define PIN_RADAR_RX       16   // LD2410C TX → ESP32 UART2 RX (direct, both 3.3V)
+#define PIN_RADAR_TX       17   // LD2410C RX ← ESP32 UART2 TX (direct, both 3.3V)
+#define RADAR_BAUD_RATE    256000  // LD2410C factory default
+#define RADAR_MAX_GATE     8    // Detect across full range (~6m)
+#define RADAR_GATE_SENSITIVITY 10  // Energy threshold per gate (lower = more sensitive; 0 disables)
+#define RADAR_IDLE_TIME    10   // Seconds target must be absent before "no one" reported
 
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds

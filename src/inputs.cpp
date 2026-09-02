@@ -6,6 +6,7 @@ static bool lastStableState = HIGH;
 static unsigned long lastDebounceTime = 0;
 
 void setupInputs() {
+  analogReadResolution(10);  // ESP32 defaults to 12-bit; use 10-bit to match Arduino Uno range (0-1023)
   pinMode(PIN_POTENTIOMETER, INPUT);
   // Button uses internal pull-up: pin reads HIGH when open, LOW when pressed
   pinMode(PIN_BUTTON, INPUT_PULLUP);

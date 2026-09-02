@@ -1,65 +1,81 @@
 #include "radar.h"
 #include "config.h"
-#include <SoftwareSerial.h>
-#include <MyLD2410.h>
+#include <HardwareSerial.h>
+#include <ld2410.h>
 
-static SoftwareSerial radarSerial(PIN_RADAR_RX, PIN_RADAR_TX);
-static MyLD2410 radar(radarSerial);
+static ld2410 radar;
+static bool _radarConnected = false;
+
+static bool radarNeedsConfig() {
+  if (radar.max_moving_gate != RADAR_MAX_GATE ||
+      radar.max_stationary_gate != RADAR_MAX_GATE ||
+      radar.sensor_idle_time != RADAR_IDLE_TIME) {
+    return true;
+  }
+  for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
+    if (radar.motion_sensitivity[gate] != RADAR_GATE_SENSITIVITY ||
+        radar.stationary_sensitivity[gate] != RADAR_GATE_SENSITIVITY) {
+      return true;
+    }
+  }
+  return false;
+}
 
 void setupRadar() {
-  Serial.println(F("Radar: initializing at 256000..."));
-
-  radarSerial.begin(RADAR_INIT_BAUD);
+  Serial2.setRxBufferSize(2048);
+  Serial2.begin(RADAR_BAUD_RATE, SERIAL_8N1, PIN_RADAR_RX, PIN_RADAR_TX);
   delay(500);
+  while (Serial2.available()) Serial2.read();
 
-  if (radar.begin()) {
-    Serial.println(F("Radar: handshake OK at 256000"));
+  _radarConnected = radar.begin(Serial2, false);
 
-    radar.configMode(true);
-    // setBaud takes an index: 1=9600, 2=19200, 3=38400, 4=57600, 5=115200, 6=230400, 7=256000
-    if (radar.setBaud(3)) {
-      Serial.println(F("Radar: baud set to 38400"));
-    }
-    radar.configMode(false);
-    delay(100);
-  } else {
-    Serial.println(F("Radar: handshake FAIL at 256000, retrying at 38400..."));
+  // Defensive: recover a sensor left stuck in config mode (e.g. power lost
+  // mid-configuration). Ignored by the sensor when already in data mode.
+  static const byte LEAVE_CFG[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
+  Serial2.write(LEAVE_CFG, sizeof(LEAVE_CFG));
+  Serial2.flush();
+  delay(100);
+  while (Serial2.available()) Serial2.read();
+
+  if (!radar.requestCurrentConfiguration()) {
+    Serial.println(F("Radar: cfg query FAIL"));
+    return;
   }
 
-  radarSerial.begin(RADAR_BAUD_RATE);
-  delay(500);
-
-  if (!radar.begin()) {
-    Serial.println(F("Radar: FAILED to connect"));
-    while (true) {}
+  if (!radarNeedsConfig()) {
+    Serial.println(F("Radar: config OK"));
+    return;
   }
 
-  Serial.println(F("Radar: connected at 38400"));
+  bool ok = true;
+  for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
+    if (!radar.setGateSensitivityThreshold(gate, RADAR_GATE_SENSITIVITY, RADAR_GATE_SENSITIVITY)) ok = false;
+  }
+  if (!radar.setMaxValues(RADAR_MAX_GATE, RADAR_MAX_GATE, RADAR_IDLE_TIME)) ok = false;
+  Serial.println(ok ? F("Radar: configured") : F("Radar: config FAIL"));
+}
 
-  radar.configMode(true);
-  radar.setMaxGate(RADAR_MAX_GATE, RADAR_MAX_GATE, RADAR_NO_ONE_WINDOW);
-  radar.configMode(false);
-
-  Serial.print(F("Radar: max gate "));
-  Serial.print(RADAR_MAX_GATE);
-  Serial.print(F(" ("));
-  Serial.print((RADAR_MAX_GATE + 1) * radar.getResolution());
-  Serial.println(F(" cm)"));
+bool radarConnected() {
+  return _radarConnected;
 }
 
 bool radarPresenceDetected() {
-  radar.check();
+  if (!_radarConnected) return false;
+  radar.read();
   return radar.presenceDetected();
 }
 
 bool radarMovingTargetDetected() {
+  if (!_radarConnected) return false;
   return radar.movingTargetDetected();
 }
 
 bool radarStationaryTargetDetected() {
+  if (!_radarConnected) return false;
   return radar.stationaryTargetDetected();
 }
 
 int radarDetectedDistance() {
-  return radar.detectedDistance();
+  if (!_radarConnected) return 0;
+  return radar.detectionDistance();
 }

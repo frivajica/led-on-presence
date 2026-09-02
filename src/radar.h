@@ -1,12 +1,11 @@
 #ifndef RADAR_H
 #define RADAR_H
 
-#include <Arduino.h>
-
 void setupRadar();
+bool radarConnected();
 bool radarPresenceDetected();
 bool radarMovingTargetDetected();
 bool radarStationaryTargetDetected();
-int  radarDetectedDistance();
+int radarDetectedDistance();
 
 #endif

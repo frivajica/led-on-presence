@@ -2,11 +2,11 @@
 
 ## Important Safety Notes
 
-- **Never connect 24V to Arduino pins.** This will permanently damage the board.
+- **Never connect 24V to ESP32 pins.** This will permanently damage the board.
 - **Disconnect all power before wiring.** Plug in 24V only after everything is connected.
 - **Double-check every wire** before powering on. A wrong connection can destroy components.
 - **Do not connect USB and LM2596 simultaneously.** Use one power source at a time.
-- **Common ground is critical.** The 24V supply GND, Arduino GND, and MOSFET Source must all be connected.
+- **Common ground is critical.** The 24V supply GND, ESP32 GND, and MOSFET Source must all be connected.
 
 ---
 
@@ -14,7 +14,7 @@
 
 | # | Component | Qty |
 |---|-----------|-----|
-| 1 | Arduino Uno R3 | 1 |
+| 1 | ESP-WROOM-32 DevKit V1 | 1 |
 | 2 | 24V COB LED Strip | 1 |
 | 3 | LD2410C mmWave Radar Sensor | 1 |
 | 4 | IRLZ44N MOSFET (TO-220) | 1 |
@@ -23,21 +23,22 @@
 | 7 | Momentary push button | 1 |
 | 8 | 24V DC Power Supply | 1 |
 | 9 | Protoboard (40x60mm) | 1 |
-| 10 | Resistors: 1kΩ, 2kΩ (voltage divider) | 2 |
-| 11 | Jumper wires (male-to-male, male-to-female) | ~14 |
-| 12 | USB cable (Type A to Type B) | 1 |
-| 13 | Multimeter (recommended) | 1 |
+| 10 | Jumper wires (male-to-male, male-to-female) | ~12 |
+| 11 | USB cable (Type-C or Micro-USB depending on board) | 1 |
+| 12 | Multimeter (recommended) | 1 |
+
+**Removed from Arduino Uno build:** 3× 1kΩ resistors (voltage divider no longer needed — ESP32 is 3.3V native, same as LD2410C).
 
 ---
 
 ## Step 1: LM2596 — Step Down 24V to 5V
 
-The LM2596 converts the 24V supply to 5V for the Arduino.
+The LM2596 converts the 24V supply to 5V for the ESP32 and LD2510C.
 
-**Before connecting to the Arduino:** Adjust the output voltage.
+**Before connecting to the ESP32:** Adjust the output voltage.
 
 1. Connect 24V to the LM2596 input terminals (IN+ and IN−)
-2. Do NOT connect the output to the Arduino yet
+2. Do NOT connect the output to the ESP32 yet
 3. Use a multimeter to measure the output voltage (OUT+ and OUT−)
 4. Turn the small trim pot on the LM2596 until the multimeter reads **5.0V**
 5. Disconnect the 24V input
@@ -57,8 +58,8 @@ The LM2596 converts the 24V supply to 5V for the Arduino.
 |------------|-----------|
 | IN+ | 24V Power Supply + |
 | IN− | 24V Power Supply − |
-| OUT+ | Arduino 5V pin |
-| OUT− | Arduino GND |
+| OUT+ | ESP32 VIN pin |
+| OUT− | ESP32 GND |
 
 **Warning:** Once the output is set to 5V, do NOT connect both USB and LM2596 output at the same time. Use one or the other.
 
@@ -66,7 +67,7 @@ The LM2596 converts the 24V supply to 5V for the Arduino.
 
 ## Step 2: IRLZ44N MOSFET
 
-The MOSFET switches the 24V circuit using a PWM signal from the Arduino.
+The MOSFET switches the 24V circuit using a PWM signal from the ESP32.
 
 **Pin identification:** Hold the TO-220 package with the flat metal face toward you and pins pointing down:
 
@@ -84,15 +85,15 @@ The MOSFET switches the 24V circuit using a PWM signal from the Arduino.
 
 | MOSFET Pin | Name | Connect To |
 |------------|------|-----------|
-| 1 | Gate (G) | Arduino D6 |
+| 1 | Gate (G) | ESP32 GPIO 25 |
 | 2 | Drain (D) | LED strip − (black wire) |
 | 3 | Source (S) | Common GND |
 
-**Important:** The Source pin connects to GND — the same ground as the Arduino and the 24V supply.
+**Important:** The Source pin connects to GND — the same ground as the ESP32 and the 24V supply.
 
 ---
 
-## Step 3: Potentiometer → Arduino
+## Step 3: Potentiometer → ESP32
 
 The potentiometer has 3 pins. Hold it with the knob facing you and the pins facing down:
 
@@ -111,15 +112,17 @@ The potentiometer has 3 pins. Hold it with the knob facing you and the pins faci
 
 | Pot Pin | Connect To | Wire Color (suggested) |
 |---------|-----------|----------------------|
-| Left | Arduino 5V | Red |
-| Middle | Arduino A0 | Yellow |
-| Right | Arduino GND | Black |
+| Left | ESP32 3.3V | Red |
+| Middle | ESP32 GPIO 34 | Yellow |
+| Right | ESP32 GND | Black |
+
+**Note:** GPIO 34 is input-only and has no internal pull-up. The potentiometer provides its own voltage divider, so no pull-up is needed.
 
 ---
 
-## Step 4: LD2410C Radar Sensor → Arduino
+## Step 4: LD2410C Radar Sensor → ESP32
 
-The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationary humans. It communicates via UART (serial) at 38400 baud.
+The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationary humans. It communicates via UART (serial) at 256000 baud (factory default — the firmware uses it as-is).
 
 **Pin identification:** The LD2410C has 5 pins on one end of the PCB:
 
@@ -137,33 +140,13 @@ The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationa
 
 | Sensor Pin | Connect To | Notes |
 |------------|-----------|-------|
-| VCC | Arduino 5V | Powers the sensor |
-| TX | Arduino Pin 10 (via SoftwareSerial RX) | Sensor sends data to Arduino |
-| RX | Arduino Pin 11 (via voltage divider) | Arduino sends commands to sensor |
+| VCC | ESP32 5V (from LM2596 or USB) | Powers the sensor |
+| TX | ESP32 GPIO 16 (UART2 RX) | Sensor sends data to ESP32 — direct connection, both 3.3V |
+| RX | ESP32 GPIO 17 (UART2 TX) | ESP32 sends commands to sensor — direct connection, both 3.3V |
 | OUT | (not used) | GPIO presence output — not needed with UART |
-| GND | Arduino GND | Common ground |
+| GND | ESP32 GND | Common ground |
 
-**Voltage divider required on TX→RX line:**
-
-The LD2410C RX pin is 3.3V. Arduino TX is 5V. You must drop the voltage:
-
-```
-Arduino Pin 11 ────[1kΩ]────┬────[2kΩ]──── GND
-                             │
-                             └────→ LD2410C RX (3.3V)
-```
-
-**How it works:**
-- Arduino sends 5V signal through the divider
-- Output is 5V × (2kΩ / (1kΩ + 2kΩ)) = 3.33V — safe for the sensor
-- The sensor TX (3.3V) can connect directly to Arduino RX — 3.3V reads as HIGH on a 5V Arduino
-
-**First boot baud rate change:**
-
-The LD2410C ships at 256000 baud. The Arduino code automatically changes it to 38400 during setup:
-1. Connects at 256000 temporarily
-2. Sends `setBaudRate(38400)` command
-3. Reconnects at 38400 for normal operation
+**No voltage divider needed!** Both the ESP32 and LD2410C operate at 3.3V. The TX/RX lines connect directly — this is a major simplification over the Arduino Uno build.
 
 **Mounting:**
 - Antenna side (copper trace side) faces the detection area
@@ -173,7 +156,7 @@ The LD2410C ships at 256000 baud. The Arduino code automatically changes it to 3
 
 ---
 
-## Step 5: Button → Arduino
+## Step 5: Button → ESP32
 
 ```
     ┌─────────┐
@@ -189,8 +172,8 @@ The LD2410C ships at 256000 baud. The Arduino code automatically changes it to 3
 
 | Button Leg | Connect To |
 |------------|-----------|
-| Leg A (any) | Arduino D3 |
-| Leg B (opposite side) | Arduino GND |
+| Leg A (any) | ESP32 GPIO 27 |
+| Leg B (opposite side) | ESP32 GND |
 
 The button connects the two legs when pressed. We use `INPUT_PULLUP` in code, so no external resistor is needed.
 
@@ -198,7 +181,7 @@ The button connects the two legs when pressed. We use `INPUT_PULLUP` in code, so
 
 ## Step 6: LED Strip → 24V Circuit
 
-This is where you switch the high voltage. **Keep these wires away from the Arduino side wires.**
+This is where you switch the high voltage. **Keep these wires away from the ESP32 side wires.**
 
 **Complete 24V circuit:**
 
@@ -231,7 +214,7 @@ When the MOSFET is ON (Gate = HIGH), current flows from 24V+ through the LED str
 This is the most critical connection. **All grounds must be connected:**
 
 ```
-24V Supply − ──────┬───── Arduino GND
+24V Supply − ──────┬───── ESP32 GND
                     │
                     ├───── LM2596 OUT−
                     │
@@ -244,80 +227,82 @@ This is the most critical connection. **All grounds must be connected:**
                     └───── Button Leg B
 ```
 
-Without a common ground, the PWM signal from the Arduino has no reference point and the MOSFET won't switch properly.
+Without a common ground, the PWM signal from the ESP32 has no reference point and the MOSFET won't switch properly.
 
 ---
 
 ## Complete Wiring Diagram
 
 ```
-                    ┌──────────────┐
-                    │  ARDUINO UNO │
-                    │              │
-  USB ─────────────►│ USB          │  (disconnect when using LM2596)
-                    │              │
-                    │ 5V ──────────┼──┬── LM2596 OUT+
-                    │              │  ├── POT Left
-                    │              │  └── LD2410C VCC
-                    │              │
-                    │ GND ─────────┼──┬── Common GND bus
-                    │              │  │
-                    │ A0 ──────────┼──── POT Middle
-                    │              │
-                    │ 10 ──────────┼──── LD2410C TX (via SoftwareSerial RX)
-                    │              │
-                    │ 11 ──────────┼──── LD2410C RX (via voltage divider!)
-                    │              │
-                    │ D3 ──────────┼──── Button Leg A
-                    │              │
-                    │ D6 ──────────┼──── MOSFET Gate
-                    │              │
-                    │ D13 ─────────┼──── (built-in LED, mode indicator)
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │  ESP-WROOM-32    │
+                    │  DevKit V1       │
+                    │                  │
+  USB ─────────────►│ USB              │  (disconnect when using LM2596)
+                    │                  │
+                    │ VIN ─────────────┼── LM2596 OUT+
+                    │                  │
+                    │ 3V3 ─────────────┼── POT Left
+                    │                  │   LD2410C VCC (direct, 3.3V!)
+                    │                  │
+                    │ GND ─────────────┼──┬── Common GND bus
+                    │                  │  │
+                    │ GPIO34 ──────────┼──── POT Middle
+                    │                  │
+                    │ GPIO16 ──────────┼──── LD2410C TX (UART2 RX, direct!)
+                    │                  │
+                    │ GPIO17 ──────────┼──── LD2410C RX (UART2 TX, direct!)
+                    │                  │
+                    │ GPIO27 ──────────┼──── Button Leg A
+                    │                  │
+                    │ GPIO25 ──────────┼──── MOSFET Gate
+                    │                  │
+                    │ GPIO2 ───────────┼──── (built-in blue LED, mode indicator)
+                    └──────────────────┘
 
-                    ┌──────────────┐
-                    │    LM2596    │
-                    │              │
-                    │  IN+ ────────┼──── 24V Supply +
-                    │  IN− ────────┼──── 24V Supply −
-                    │  OUT+ ───────┼──── Arduino 5V
-                    │  OUT− ───────┼──── Common GND
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │    LM2596        │
+                    │                  │
+                    │  IN+ ────────────┼──── 24V Supply +
+                    │  IN− ────────────┼──── 24V Supply −
+                    │  OUT+ ───────────┼──── ESP32 VIN
+                    │  OUT− ───────────┼──── Common GND
+                    └──────────────────┘
 
-                    ┌──────────────┐
-                    │  IRLZ44N     │
-                    │  (TO-220)    │
-                    │              │
-                    │  Gate ───────┼──── Arduino D6
-                    │  Drain ──────┼──── LED Strip −
-                    │  Source ─────┼──── Common GND
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │  IRLZ44N         │
+                    │  (TO-220)        │
+                    │                  │
+                    │  Gate ───────────┼──── ESP32 GPIO 25
+                    │  Drain ──────────┼──── LED Strip −
+                    │  Source ─────────┼──── Common GND
+                    └──────────────────┘
 
-                    ┌──────────────┐
-                    │  24V SUPPLY  │
-                    │              │
-                    │  + ──────────┼──── LM2596 IN+
-                    │              │     LED Strip +
-                    │  − ──────────┼──── LM2596 IN−
-                    │              │     Common GND
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │  24V SUPPLY      │
+                    │                  │
+                    │  + ──────────────┼──── LM2596 IN+
+                    │                  │     LED Strip +
+                    │  − ──────────────┼──── LM2596 IN−
+                    │                  │     Common GND
+                    └──────────────────┘
 
-                    ┌──────────────┐
-                    │  LED STRIP   │
-                    │              │
-                    │  + ──────────┼──── 24V Supply +
-                    │  − ──────────┼──── MOSFET Drain
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │  LED STRIP       │
+                    │                  │
+                    │  + ──────────────┼──── 24V Supply +
+                    │  − ──────────────┼──── MOSFET Drain
+                    └──────────────────┘
 
-                    ┌──────────────┐
-                    │  LD2410C     │
-                    │  RADAR       │
-                    │              │
-                    │  VCC ────────┼──── Arduino 5V
-                    │  TX ─────────┼──── Arduino Pin 10
-                    │  RX ─────────┼──── Arduino Pin 11 (via voltage divider!)
-                    │  GND ────────┼──── Common GND
-                    └──────────────┘
+                    ┌──────────────────┐
+                    │  LD2410C         │
+                    │  RADAR           │
+                    │                  │
+                    │  VCC ────────────┼──── ESP32 5V (or 3.3V)
+                    │  TX ─────────────┼──── ESP32 GPIO 16 (direct!)
+                    │  RX ─────────────┼──── ESP32 GPIO 17 (direct!)
+                    │  GND ────────────┼──── Common GND
+                    └──────────────────┘
 ```
 
 ---
@@ -325,18 +310,17 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
 ## Before You Power On — Checklist
 
 1. ✅ LM2596 output adjusted to 5.0V (measured with multimeter)
-2. ✅ All grounds connected (24V−, Arduino GND, MOSFET Source)
-3. ✅ MOSFET Gate → Arduino D6
+2. ✅ All grounds connected (24V−, ESP32 GND, MOSFET Source)
+3. ✅ MOSFET Gate → ESP32 GPIO 25
 4. ✅ MOSFET Drain → LED strip −
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
-7. ✅ Potentiometer wired correctly (5V, A0, GND)
-8. ✅ LD2410C wired correctly (5V, Pin 10, Pin 11 with voltage divider, GND)
-9. ✅ Voltage divider on Pin11 → LD2410C RX (1kΩ + 2kΩ)
-10. ✅ Button wired correctly (D3, GND)
-11. ✅ No wire crosses between Arduino side and 24V side
-12. ✅ 24V supply is UNPLUGGED from wall outlet
-13. ✅ USB is DISCONNECTED (using LM2596 for power)
+7. ✅ Potentiometer wired correctly (3.3V, GPIO 34, GND)
+8. ✅ LD2410C wired correctly (5V, GPIO 16, GPIO 17 — direct, no voltage divider!)
+9. ✅ Button wired correctly (GPIO 27, GND)
+10. ✅ No wire crosses between ESP32 side and 24V side
+11. ✅ 24V supply is UNPLUGGED from wall outlet
+12. ✅ USB is DISCONNECTED (using LM2596 for power)
 
 ---
 
@@ -344,12 +328,12 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
 
 You can test the logic before connecting the 24V supply:
 
-1. Connect USB to Arduino (do NOT connect 24V)
+1. Connect USB to ESP32 (do NOT connect 24V)
 2. Connect all inputs (potentiometer, LD2410C, button)
-3. Connect MOSFET Gate to D6 (leave Drain and Source disconnected)
-4. Open serial monitor (`pio device monitor`)
+3. Connect MOSFET Gate to GPIO 25 (leave Drain and Source disconnected)
+4. Open serial monitor (`pio device monitor` — 115200 baud)
 5. You should see `LED-on-presence started` and `Mode: MOTION`
-6. The radar will initialize at 256000, change to 38400, then show `Radar: connected`
+6. The radar should initialize and show `Radar: config OK` (or `Radar: configured` on first boot)
 7. Walk in front of sensor → serial should show `Pres: Y` with distance
 8. Turn the potentiometer → serial should show brightness value changing
 9. Press the button → mode should toggle to MANUAL
