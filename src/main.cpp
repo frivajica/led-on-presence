@@ -22,6 +22,10 @@ static uint8_t targetBrightness = 0;
 static unsigned long lastMotionTime = 0;
 static unsigned long cooldownStartTime = 0;
 
+Mode getMode() {
+  return currentMode;
+}
+
 static void updateMotionState(int potValue, bool presence) {
   if (currentMode != MODE_MOTION) {
     setLightOn(potValue > 5);
@@ -139,17 +143,7 @@ void setup() {
 }
 
 void loop() {
-  ArduinoOTA.handle();
-  wifiLoop();
-  mqttLoop();
-  temperaturePoll();
-
-  if (readButton()) {
-    currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
-    Serial.print(F("Mode: "));
-    Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
-  }
-
+  // PRIORITY 1: LED control — never blocked by network
   int potValue = readPotentiometer();
   bool presence = radarPresenceDetected();
 
@@ -164,11 +158,26 @@ void loop() {
   setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
 
+  // PRIORITY 2: Inputs (fast, non-blocking)
+  if (readButton()) {
+    currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
+    Serial.print(F("Mode: "));
+    Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
+  }
+
+  // PRIORITY 3: Network — can block, runs after LED is updated
+  ArduinoOTA.handle();
+  wifiLoop();
+  mqttLoop();
+  temperaturePoll();
+
+  // PRIORITY 4: Reporting — periodic, runs last
   static unsigned long lastMqttPublish = 0;
   if (millis() - lastMqttPublish > 2000) {
     lastMqttPublish = millis();
+    uint16_t gasLevel = gasReadAnalog();
     mqttPublishAll(presence, radarDetectedDistance(), isLightOn(), currentBrightness,
-                   gasReadAnalog(), gasIsAlarm(), potValue,
+                   gasLevel, gasIsAlarm(), potValue,
                    temperatureGetCelsius(), temperatureGetHumidity());
   }
 

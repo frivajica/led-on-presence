@@ -10,6 +10,7 @@
 static WiFiClient wifiClient;
 static PubSubClient mqtt(wifiClient);
 static bool discoverySent = false;
+static bool mqttConnecting = false;
 
 static String topicFor(const char* suffix) {
   return String(MQTT_DEVICE_NAME) + "/" + suffix;
@@ -29,6 +30,25 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       Serial.print(F("MQTT: gas threshold set to "));
       Serial.println(val);
     }
+  }
+}
+
+static void mqttConnectTask(void* param) {
+  for (;;) {
+    if (mqtt.connected() || WiFi.status() != WL_CONNECTED) {
+      mqttConnecting = false;
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      continue;
+    }
+
+    mqttConnecting = true;
+    if (mqtt.connect(MQTT_DEVICE_NAME)) {
+      Serial.println(F("MQTT: connected"));
+      discoverySent = false;
+      mqtt.subscribe(topicFor("config/gas_threshold/set").c_str());
+    }
+    mqttConnecting = false;
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
 
@@ -77,27 +97,13 @@ void mqttSetup() {
   mqtt.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
   mqtt.setCallback(mqttCallback);
   mqtt.setBufferSize(512);
+
+  xTaskCreatePinnedToCore(mqttConnectTask, "mqtt", 4096, nullptr, 1, nullptr, tskNO_AFFINITY);
 }
 
 void mqttLoop() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  if (!mqtt.connected()) {
-    unsigned long now = millis();
-    static unsigned long lastAttempt = 0;
-    if (now - lastAttempt > 5000) {
-      lastAttempt = now;
-      if (mqtt.connect(MQTT_DEVICE_NAME)) {
-        Serial.println(F("MQTT: connected"));
-        discoverySent = false;
-        mqtt.subscribe(topicFor("config/gas_threshold/set").c_str());
-      }
-    }
-    return;
-  }
-
+  if (!mqtt.connected()) return;
   mqtt.loop();
-
   if (!discoverySent) {
     sendDiscovery();
   }

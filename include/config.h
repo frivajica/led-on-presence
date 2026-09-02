@@ -30,7 +30,7 @@
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 
 // --- PWM ---
-#define FADE_STEP          5    // Brightness change per loop iteration (0-255)
+#define FADE_STEP          15   // Brightness change per loop iteration (0-255)
 
 // --- Motion Timeout ---
 #define MOTION_TIMEOUT_MS  15000UL  // 15 seconds after last motion before fade-out
@@ -41,5 +41,7 @@ enum Mode {
   MODE_MOTION,   // Light triggered by motion sensor, pot sets max brightness
   MODE_MANUAL    // Pot directly controls brightness, motion ignored
 };
+
+Mode getMode();
 
 #endif

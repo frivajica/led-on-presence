@@ -67,8 +67,7 @@ void setupRadar() {
 bool radarPresenceDetected() {
   if (!sensorReady) return false;
   radar.read();
-  // Filter out 0cm readings — likely false positives from nearby wiring
-  return radar.presenceDetected() && radar.detectionDistance() > 0;
+  return radar.presenceDetected();
 }
 
 int radarDetectedDistance() {
