@@ -14,8 +14,8 @@
 #define PIN_RADAR_TX       17   // LD2410C RX ← ESP32 UART2 TX (direct, both 3.3V)
 #define RADAR_BAUD_RATE    256000  // LD2410C factory default
 #define RADAR_MAX_GATE     8    // Detect across full range (~6m)
-#define RADAR_GATE_SENSITIVITY 30  // Energy threshold per gate (lower = more sensitive; 0 disables)
-#define RADAR_IDLE_TIME    25   // Seconds target must be absent before "no one" reported
+#define RADAR_GATE_SENSITIVITY 40  // Energy threshold per gate (lower = more sensitive; 0 disables)
+#define RADAR_IDLE_TIME    10   // Seconds target must be absent before "no one" reported
 
 // --- Gas Sensor (Steren ARD-352 / MQ-2) ---
 #define PIN_GAS_DIGITAL    14   // Digital output: LOW = gas detected
@@ -30,11 +30,7 @@
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
 
 // --- PWM ---
-#define FADE_STEP          15   // Brightness change per loop iteration (0-255)
-
-// --- Motion Timeout ---
-#define MOTION_TIMEOUT_MS  15000UL  // 15 seconds after last motion before fade-out
-#define COOLDOWN_MS        2000UL   // 2 seconds ignore sensor after fade-out (prevents re-trigger from LED heat)
+#define FADE_DURATION_MS    500UL  // Brightness fade takes this many milliseconds (0 = instant)
 
 // --- Modes ---
 enum Mode {

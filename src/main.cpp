@@ -11,19 +11,46 @@
 
 enum MotionState {
   MOTION_IDLE,
-  MOTION_ACTIVE,
-  MOTION_COOLDOWN
+  MOTION_ACTIVE
 };
 
 static Mode currentMode = MODE_MOTION;
 static MotionState motionState = MOTION_IDLE;
 static uint8_t currentBrightness = 0;
 static uint8_t targetBrightness = 0;
-static unsigned long lastMotionTime = 0;
-static unsigned long cooldownStartTime = 0;
+
+static uint8_t fadeStartBrightness = 0;
+static unsigned long fadeStartTime = 0;
+static bool fading = false;
 
 Mode getMode() {
   return currentMode;
+}
+
+static void fadeStart(uint8_t target) {
+  if (target == currentBrightness) return;
+  fadeStartBrightness = currentBrightness;
+  targetBrightness = target;
+  fadeStartTime = millis();
+  fading = true;
+}
+
+static void fadeUpdate() {
+  if (!fading) return;
+  if (FADE_DURATION_MS == 0) {
+    currentBrightness = targetBrightness;
+    fading = false;
+    return;
+  }
+  unsigned long elapsed = millis() - fadeStartTime;
+  if (elapsed >= FADE_DURATION_MS) {
+    currentBrightness = targetBrightness;
+    fading = false;
+  } else {
+    float progress = (float)elapsed / FADE_DURATION_MS;
+    currentBrightness = fadeStartBrightness +
+        (int)((int)targetBrightness - (int)fadeStartBrightness) * progress;
+  }
 }
 
 static void updateMotionState(int potValue, bool presence) {
@@ -32,38 +59,12 @@ static void updateMotionState(int potValue, bool presence) {
     motionState = MOTION_IDLE;
     return;
   }
-  switch (motionState) {
-    case MOTION_IDLE:
-      if (presence) {
-        motionState = MOTION_ACTIVE;
-        setLightOn(true);
-        lastMotionTime = millis();
-      }
-      break;
-    case MOTION_ACTIVE:
-      if (presence) {
-        lastMotionTime = millis();
-      }
-      if (millis() - lastMotionTime > MOTION_TIMEOUT_MS) {
-        motionState = MOTION_COOLDOWN;
-        cooldownStartTime = millis();
-        setLightOn(false);
-      }
-      break;
-    case MOTION_COOLDOWN:
-      if (millis() - cooldownStartTime > COOLDOWN_MS) {
-        motionState = MOTION_IDLE;
-      }
-      break;
-  }
-}
-
-static void fadeToward(uint8_t target) {
-  targetBrightness = target;
-  if (currentBrightness < targetBrightness) {
-    currentBrightness = min((int)(currentBrightness + FADE_STEP), (int)targetBrightness);
-  } else if (currentBrightness > targetBrightness) {
-    currentBrightness = max((int)(currentBrightness - FADE_STEP), (int)targetBrightness);
+  if (presence) {
+    motionState = MOTION_ACTIVE;
+    setLightOn(true);
+  } else {
+    motionState = MOTION_IDLE;
+    setLightOn(false);
   }
 }
 
@@ -90,22 +91,9 @@ static void printStatus(int potValue, bool presence) {
     case MOTION_IDLE:
       Serial.print(F("IDLE"));
       break;
-    case MOTION_ACTIVE: {
-      unsigned long elapsed = millis() - lastMotionTime;
-      unsigned long remaining = (elapsed < MOTION_TIMEOUT_MS) ? (MOTION_TIMEOUT_MS - elapsed) / 1000 : 0;
-      Serial.print(F("ACTIVE "));
-      Serial.print(remaining);
-      Serial.print(F("s"));
+    case MOTION_ACTIVE:
+      Serial.print(F("ACTIVE"));
       break;
-    }
-    case MOTION_COOLDOWN: {
-      unsigned long elapsed = millis() - cooldownStartTime;
-      unsigned long remaining = (elapsed < COOLDOWN_MS) ? (COOLDOWN_MS - elapsed) / 1000 : 0;
-      Serial.print(F("COOL "));
-      Serial.print(remaining);
-      Serial.print(F("s"));
-      break;
-    }
   }
   Serial.print(F(" Light: "));
   Serial.print(isLightOn() ? F("ON") : F("OFF"));
@@ -149,11 +137,12 @@ void loop() {
 
   updateMotionState(potValue, presence);
 
-  if (isLightOn()) {
-    fadeToward(map(potValue, 0, 1023, 255, 0));
-  } else {
-    fadeToward(0);
+  int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
+
+  if ((int)target != (int)targetBrightness) {
+    fadeStart(target);
   }
+  fadeUpdate();
 
   setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
