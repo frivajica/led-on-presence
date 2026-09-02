@@ -38,20 +38,17 @@ static void fadeStart(uint8_t target) {
 
 static void fadeUpdate() {
   if (!fading) return;
-  int distance = abs((int)targetBrightness - (int)fadeStartBrightness);
-  if (FADE_STEPS_PER_SEC == 0 || distance == 0) {
+  if (FADE_DURATION_MS == 0) {
     currentBrightness = targetBrightness;
     fading = false;
     return;
   }
-  unsigned long duration = max((unsigned long)FADE_MIN_MS,
-                               (unsigned long)distance * 1000UL / FADE_STEPS_PER_SEC);
   unsigned long elapsed = millis() - fadeStartTime;
-  if (elapsed >= duration) {
+  if (elapsed >= FADE_DURATION_MS) {
     currentBrightness = targetBrightness;
     fading = false;
   } else {
-    float progress = (float)elapsed / duration;
+    float progress = (float)elapsed / FADE_DURATION_MS;
     currentBrightness = fadeStartBrightness +
         (int)((int)targetBrightness - (int)fadeStartBrightness) * progress;
   }
