@@ -104,7 +104,8 @@ The docs use "D3", "D6", etc., but your physical Arduino board just shows **bare
 Code says:          Board shows:
   D3          →        3
   D6          →        6
-  D2          →        2
+  D10         →        10
+  D11         →        11
   A0          →       A0
 ```
 
@@ -121,7 +122,7 @@ Here's where every component goes. The Arduino sits to the left of the breadboar
 ```
             ARDUINO UNO
    ┌──────────────────────────────┐
-   │  6    3    2    A0   5V  GND│
+   │  6    3   11   10  A0  5V GND│
    │  ○    ○    ○    ○    ○   ○  │
    └──┼────┼────┼────┼────┼───┼──┘
       │    │    │    │    │   │
@@ -277,27 +278,49 @@ Wiring:
 
 ---
 
-### Step 5: Motion Sensor (Off-board)
+### Step 5: LD2410C Radar Sensor (Off-board)
 
-The HC-SR501 has pins spaced too wide for a breadboard row. Use male-to-female jumper wires:
+The LD2410C has 5 pins but we only use 4 (VCC, TX, RX, GND). Use male-to-female jumper wires:
 
 ```
-    Motion Sensor           Breadboard
-    ┌───────────┐
-    │  ○ Fresnel│
-    │    Lens   │          + rail (5V)
-    │           │              ○
-    └─┬───┬───┬─┘          − rail (GND)
-      │   │   │                ○
-     VCC OUT GND           Arduino pin 2
-                              ○
+    LD2410C Radar Sensor        Breadboard
+    ┌──────────────────────┐
+    │ ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ │ ← Antenna side (faces detection area)
+    │ ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ │
+    │                      │
+    └──┬───┬───┬───┬───┬───┘
+       VCC TX  RX  OUT GND
+
     Wires:
     VCC ──→ + rail (5V)
-    OUT ──→ Arduino pin 2
+    TX  ──→ Arduino pin 10
+    RX  ──→ Arduino pin 11 (via voltage divider!)
     GND ──→ − rail (GND)
 ```
 
-Since the sensor is on flying leads (not plugged into the breadboard), just connect its wires to the appropriate rails and pin.
+**Voltage divider on RX line** (required!):
+
+The LD2410C RX pin is 3.3V. You need to drop Arduino's 5V:
+
+```
+Arduino pin 11 ──[1kΩ]──┬──[2kΩ]── − rail (GND)
+                         └──→ LD2410C RX pin
+```
+
+Use two resistors on the breadboard:
+1. Plug a 1kΩ resistor between row 12 (any hole) and row 13
+2. Plug a 2kΩ resistor between row 13 and − rail
+3. Connect Arduino pin 11 to row 12
+4. Connect LD2410C RX wire to row 13
+
+```
+    a  b  c  d  e
+    ○  ○  ○  ○  ○  ← Row 12: Arduino pin 11 → 1kΩ resistor
+    ○  ○  ○  ○  ○  ← Row 13: 1kΩ → 2kΩ junction → LD2410C RX
+    ○  ○  ○  ○  ○  ← Row 14
+```
+
+**Mounting:** Place the LD2410C with the antenna side (copper trace) facing the room. The sensor can sit on the breadboard or hang off the edge on its jumper wires.
 
 ---
 
@@ -341,9 +364,9 @@ Here's the full layout with all wires:
 ```
          ARDUINO UNO
     ┌─────────────────────────┐
-    │ 6      3      2      A0 5V GND│
-    │ ○      ○      ○      ○  ○  ○ │
-    └──┼──────┼──────┼──────┼──┼──┼┘
+    │ 6      3   11   10   A0 5V GND│
+    │ ○      ○    ○    ○    ○  ○  ○ │
+    └──┼──────┼────┼────┼──┼──┼┘
        │     │     │     │   │  │
        │     │     │     │   │  │
        │     │     │     │   │  │
@@ -367,6 +390,8 @@ Here's the full layout with all wires:
      ○─┤ │a9 ○  b9 ○  c9 ○  d9 ○  e9│ │  f9 ○  g9 ○  h9 ○  i9 ○  j9 ○│ ├─○ Row 9  ← MOSFET Drain (LED−)
      ○─┤ │a10○  b10○  c10○  d10○  e10│ │ f10○  g10○  h10○  i10○  j10○ │ ├─○ Row 10 ← MOSFET Source (GND)
      ○─┤ │a11○  b11○  c11○  d11○  e11│ │ f11○  g11○  h11○  i11○  j11○ │ ├─○ Row 11
+     ○─┤ │a12○  b12○  c12○  d12○  e12│ │ f12○  g12○  h12○  i12○  j12○ │ ├─○ Row 12 ← Voltage divider (1kΩ)
+     ○─┤ │a13○  b13○  c13○  d13○  e13│ │ f13○  g13○  h13○  i13○  j13○ │ ├─○ Row 13 ← Voltage divider (2kΩ junction)
      ○─┤ └───┼─────┼─────┼───┼──┘ ├─○
      ○─┤     │     │     │   │  ├─○
      ...    ...                       ...
@@ -392,9 +417,11 @@ Here's the full layout with all wires:
 | Arduino pin 6 | MOSFET Gate, row 8 (left side) | Green |
 | LED strip − | MOSFET Drain, row 9 (right side) | Black (thick) |
 | − rail | MOSFET Source, row 10 (left side) | Black |
-| Motion sensor VCC | + rail | Red |
-| Motion sensor OUT | Arduino pin 2 | White |
-| Motion sensor GND | − rail | Black |
+| + rail | LD2410C VCC | Red |
+| Arduino pin 10 | LD2410C TX | White |
+| Arduino pin 11 | Voltage divider (row 12) | Blue |
+| Voltage divider (row 13) | LD2410C RX | Blue |
+| − rail | LD2410C GND | Black |
 | LM2596 OUT+ | + rail | Red (after adjusting to 5V) |
 | LM2596 OUT− | − rail | Black |
 | 24V Supply + | LM2596 IN+ and LED strip + | Red (thick) |
@@ -509,12 +536,12 @@ If you're out of jumper wires, bare brass or copper wire works for short jumps:
 
 Before connecting the 24V supply:
 
-1. **Build the 5V side only** — potentiometer, button, motion sensor, MOSFET Gate
+1. **Build the 5V side only** — potentiometer, button, LD2410C radar, MOSFET Gate
 2. **Connect USB** to Arduino
 3. **Open serial monitor** (`pio device monitor`)
 4. **Test each input:**
    - Turn pot → `Pot:` value should change
-   - Wave hand → `Motion:` should show `Y`
+   - Walk in front of sensor → `Pres:` should show `Y` with distance
    - Press button → `Mode:` should toggle
 5. **Check MOSFET Gate signal** — `Bright:` value should change as you turn the pot
 6. **Only then** connect the 24V supply and LED strip

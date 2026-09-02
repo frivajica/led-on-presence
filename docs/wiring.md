@@ -16,16 +16,17 @@
 |---|-----------|-----|
 | 1 | Arduino Uno R3 | 1 |
 | 2 | 24V COB LED Strip | 1 |
-| 3 | HC-SR501 PIR Motion Sensor | 1 |
+| 3 | LD2410C mmWave Radar Sensor | 1 |
 | 4 | IRLZ44N MOSFET (TO-220) | 1 |
 | 5 | LM2596 Buck Converter Module | 1 |
 | 6 | Potentiometer (10kΩ typical) | 1 |
 | 7 | Momentary push button | 1 |
 | 8 | 24V DC Power Supply | 1 |
 | 9 | Protoboard (40x60mm) | 1 |
-| 10 | Jumper wires (male-to-male, male-to-female) | ~12 |
-| 11 | USB cable (Type A to Type B) | 1 |
-| 12 | Multimeter (recommended) | 1 |
+| 10 | Resistors: 1kΩ, 2kΩ (voltage divider) | 2 |
+| 11 | Jumper wires (male-to-male, male-to-female) | ~14 |
+| 12 | USB cable (Type A to Type B) | 1 |
+| 13 | Multimeter (recommended) | 1 |
 
 ---
 
@@ -116,29 +117,59 @@ The potentiometer has 3 pins. Hold it with the knob facing you and the pins faci
 
 ---
 
-## Step 4: HC-SR501 Motion Sensor → Arduino
+## Step 4: LD2410C Radar Sensor → Arduino
 
-The sensor has 3 pins sticking out. Looking at the sensor from the front (lens side):
+The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationary humans. It communicates via UART (serial) at 38400 baud.
+
+**Pin identification:** The LD2410C has 5 pins on one end of the PCB:
 
 ```
-    ┌───────────┐
-    │  ○ Fresnel│
-    │    Lens   │
-    │           │
-    └─┬───┬───┬─┘
-      │   │   │
-     VCC OUT GND
+    LD2410C PCB (antenna side facing up):
+
+    ┌──────────────────────┐
+    │ ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ │ ← Antenna (ACTIVE detection face)
+    │ ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ │
+    │                      │
+    │  [chip] [chip]       │
+    └──┬───┬───┬───┬───┬───┘
+       VCC TX  RX  OUT GND
 ```
 
-| Sensor Pin | Connect To | Wire Color |
-|------------|-----------|------------|
-| VCC | Arduino 5V | Red |
-| OUT | Arduino D2 | White |
-| GND | Arduino GND | Black |
+| Sensor Pin | Connect To | Notes |
+|------------|-----------|-------|
+| VCC | Arduino 5V | Powers the sensor |
+| TX | Arduino Pin 10 (via SoftwareSerial RX) | Sensor sends data to Arduino |
+| RX | Arduino Pin 11 (via voltage divider) | Arduino sends commands to sensor |
+| OUT | (not used) | GPIO presence output — not needed with UART |
+| GND | Arduino GND | Common ground |
 
-**Adjust the pots on the sensor BEFORE wiring:**
-- Left pot (sensitivity): turn to about 50%
-- Right pot (delay): turn **fully counter-clockwise** (minimum ~0.3s) — Arduino handles the timeout
+**Voltage divider required on TX→RX line:**
+
+The LD2410C RX pin is 3.3V. Arduino TX is 5V. You must drop the voltage:
+
+```
+Arduino Pin 11 ────[1kΩ]────┬────[2kΩ]──── GND
+                             │
+                             └────→ LD2410C RX (3.3V)
+```
+
+**How it works:**
+- Arduino sends 5V signal through the divider
+- Output is 5V × (2kΩ / (1kΩ + 2kΩ)) = 3.33V — safe for the sensor
+- The sensor TX (3.3V) can connect directly to Arduino RX — 3.3V reads as HIGH on a 5V Arduino
+
+**First boot baud rate change:**
+
+The LD2410C ships at 256000 baud. The Arduino code automatically changes it to 38400 during setup:
+1. Connects at 256000 temporarily
+2. Sends `setBaudRate(38400)` command
+3. Reconnects at 38400 for normal operation
+
+**Mounting:**
+- Antenna side (copper trace side) faces the detection area
+- Mount 2–3m high, slight downward angle
+- Leave space behind the sensor (back lobe can detect through thin walls)
+- Optional: place a metal shield behind the sensor to block back lobe detection
 
 ---
 
@@ -208,7 +239,7 @@ This is the most critical connection. **All grounds must be connected:**
                     │
                     ├───── Potentiometer Right pin
                     │
-                    ├───── Motion Sensor GND
+                    ├───── LD2410C GND
                     │
                     └───── Button Leg B
 ```
@@ -227,13 +258,15 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
                     │              │
                     │ 5V ──────────┼──┬── LM2596 OUT+
                     │              │  ├── POT Left
-                    │              │  └── PIR VCC
+                    │              │  └── LD2410C VCC
                     │              │
                     │ GND ─────────┼──┬── Common GND bus
                     │              │  │
                     │ A0 ──────────┼──── POT Middle
                     │              │
-                    │ D2 ──────────┼──── PIR OUT
+                    │ 10 ──────────┼──── LD2410C TX (via SoftwareSerial RX)
+                    │              │
+                    │ 11 ──────────┼──── LD2410C RX (via voltage divider!)
                     │              │
                     │ D3 ──────────┼──── Button Leg A
                     │              │
@@ -275,6 +308,16 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
                     │  + ──────────┼──── 24V Supply +
                     │  − ──────────┼──── MOSFET Drain
                     └──────────────┘
+
+                    ┌──────────────┐
+                    │  LD2410C     │
+                    │  RADAR       │
+                    │              │
+                    │  VCC ────────┼──── Arduino 5V
+                    │  TX ─────────┼──── Arduino Pin 10
+                    │  RX ─────────┼──── Arduino Pin 11 (via voltage divider!)
+                    │  GND ────────┼──── Common GND
+                    └──────────────┘
 ```
 
 ---
@@ -288,11 +331,12 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
 7. ✅ Potentiometer wired correctly (5V, A0, GND)
-8. ✅ Motion sensor wired correctly (5V, D2, GND)
-9. ✅ Button wired correctly (D3, GND)
-10. ✅ No wire crosses between Arduino side and 24V side
-11. ✅ 24V supply is UNPLUGGED from wall outlet
-12. ✅ USB is DISCONNECTED (using LM2596 for power)
+8. ✅ LD2410C wired correctly (5V, Pin 10, Pin 11 with voltage divider, GND)
+9. ✅ Voltage divider on Pin11 → LD2410C RX (1kΩ + 2kΩ)
+10. ✅ Button wired correctly (D3, GND)
+11. ✅ No wire crosses between Arduino side and 24V side
+12. ✅ 24V supply is UNPLUGGED from wall outlet
+13. ✅ USB is DISCONNECTED (using LM2596 for power)
 
 ---
 
@@ -301,13 +345,14 @@ Without a common ground, the PWM signal from the Arduino has no reference point 
 You can test the logic before connecting the 24V supply:
 
 1. Connect USB to Arduino (do NOT connect 24V)
-2. Connect all inputs (potentiometer, motion sensor, button)
+2. Connect all inputs (potentiometer, LD2410C, button)
 3. Connect MOSFET Gate to D6 (leave Drain and Source disconnected)
 4. Open serial monitor (`pio device monitor`)
 5. You should see `LED-on-presence started` and `Mode: MOTION`
-6. Wave your hand → serial should show motion detected
-7. Turn the potentiometer → serial should show brightness value changing
-8. Press the button → mode should toggle to MANUAL
+6. The radar will initialize at 256000, change to 38400, then show `Radar: connected`
+7. Walk in front of sensor → serial should show `Pres: Y` with distance
+8. Turn the potentiometer → serial should show brightness value changing
+9. Press the button → mode should toggle to MANUAL
 
 The `Bright:` value in serial output shows the PWM value (0–255). When it changes as you turn the pot, the MOSFET wiring is ready.
 

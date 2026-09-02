@@ -5,7 +5,6 @@
 
 void setupInputs();
 int  readPotentiometer();
-bool readMotion();
 bool readButton();
 
 #endif

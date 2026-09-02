@@ -1,6 +1,7 @@
 #include "config.h"
 #include "inputs.h"
 #include "outputs.h"
+#include "radar.h"
 
 enum MotionState {
   MOTION_IDLE,
@@ -20,6 +21,7 @@ void setup() {
   Serial.begin(9600);
   setupInputs();
   setupOutputs();
+  setupRadar();
 
   Serial.println(F("LED-on-presence started"));
   Serial.println(F("Mode: MOTION (default)"));
@@ -36,13 +38,13 @@ void loop() {
 
   // --- Read inputs ---
   int potValue = readPotentiometer();
-  bool motionDetected = readMotion();
+  bool presence = radarPresenceDetected();
 
   // --- Motion state machine ---
   if (currentMode == MODE_MOTION) {
     switch (motionState) {
       case MOTION_IDLE:
-        if (motionDetected) {
+        if (presence) {
           motionState = MOTION_ACTIVE;
           lightOn = true;
           lastMotionTime = millis();
@@ -50,7 +52,7 @@ void loop() {
         break;
 
       case MOTION_ACTIVE:
-        if (motionDetected) {
+        if (presence) {
           lastMotionTime = millis();
         }
         if (millis() - lastMotionTime > MOTION_TIMEOUT_MS) {
@@ -100,8 +102,13 @@ void loop() {
     Serial.print(currentBrightness);
     Serial.print(F("/"));
     Serial.print(targetBrightness);
-    Serial.print(F(" Motion: "));
-    Serial.print(motionDetected ? F("Y") : F("N"));
+    Serial.print(F(" Pres: "));
+    Serial.print(presence ? F("Y") : F("N"));
+    if (presence) {
+      Serial.print(F(" "));
+      Serial.print(radarDetectedDistance());
+      Serial.print(F("cm"));
+    }
     Serial.print(F(" State: "));
     switch (motionState) {
       case MOTION_IDLE:

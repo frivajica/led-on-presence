@@ -7,17 +7,12 @@ static unsigned long lastDebounceTime = 0;
 
 void setupInputs() {
   pinMode(PIN_POTENTIOMETER, INPUT);
-  pinMode(PIN_MOTION_SENSOR, INPUT);
   // Button uses internal pull-up: pin reads HIGH when open, LOW when pressed
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 }
 
 int readPotentiometer() {
   return analogRead(PIN_POTENTIOMETER);
-}
-
-bool readMotion() {
-  return digitalRead(PIN_MOTION_SENSOR) == HIGH;
 }
 
 bool readButton() {

@@ -5,10 +5,17 @@
 
 // --- Pin Definitions ---
 #define PIN_POTENTIOMETER  A0   // Potentiometer wiper (analog input)
-#define PIN_MOTION_SENSOR  2    // HC-SR501 OUT (digital input)
 #define PIN_BUTTON         3    // Mode toggle button (digital input, uses INPUT_PULLUP)
 #define PIN_MOSFET         6    // IRLZ44N Gate — PWM output to LED strip
 #define PIN_MODE_LED       13   // Built-in LED — indicates current mode
+
+// --- LD2410C Radar Sensor ---
+#define PIN_RADAR_RX       10   // LD2410C TX → Arduino RX (SoftwareSerial)
+#define PIN_RADAR_TX       11   // LD2410C RX ← Arduino TX (via voltage divider)
+#define RADAR_BAUD_RATE    38400
+#define RADAR_INIT_BAUD    256000
+#define RADAR_MAX_GATE     5    // 5 × 75cm = 450cm ≈ 4m detection range
+#define RADAR_NO_ONE_WINDOW 5   // seconds before sensor reports "no one"
 
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
