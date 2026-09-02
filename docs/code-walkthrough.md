@@ -3,7 +3,7 @@
 ## Project Structure
 
 ```
-led-on-presence/
+led-multisensor/
 ├── platformio.ini              # Build config + libraries
 ├── include/
 │   ├── config.h                # Pin definitions and constants
@@ -56,7 +56,8 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 #define PIN_RADAR_TX       17
 #define RADAR_BAUD_RATE    256000  // LD2410C factory default
 #define RADAR_MAX_GATE     8       // detect across full range (~6m)
-#define RADAR_GATE_SENSITIVITY 10  // per-gate energy threshold (lower = more sensitive)
+#define RADAR_MOTION_SENSITIVITY     40  // movement detection (0-100, lower = more sensitive)
+#define RADAR_STATIONARY_SENSITIVITY 10  // breathing/still presence (lower = more sensitive)
 #define RADAR_IDLE_TIME    10      // seconds absent before "no one" reported
 ```
 
@@ -66,26 +67,22 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 
 **Why GPIO 16/17 for radar?** These are the default UART2 RX/TX pins on ESP32. Using hardware UART means no SoftwareSerial timing issues.
 
-```cpp
-#define FADE_STEP  5
-```
-
-How many brightness levels to change per loop iteration. With a 20ms delay per loop, fading from 0 to 255 takes `255/5 × 0.02 = ~1 second`. Higher = faster fade.
+**Split sensitivity:** The LD2410C has separate thresholds for motion (Doppler shift from movement) and stationary presence (micro-movements like breathing). Motion produces strong radar returns — sensitivity 40 works well. Stationary presence is much weaker — sensitivity 10 is needed to detect it reliably.
 
 ```cpp
-#define MOTION_TIMEOUT_MS 15000UL
+#define FADE_MAX_MS  500UL
 ```
 
-How long (in milliseconds) the light stays on after the last detected motion. The `UL` suffix means "unsigned long" — required because 15000 doesn't fit in a 16-bit int on some platforms.
+Fade duration in milliseconds at full brightness (0→255). Duration scales with target brightness: `FADE_MAX_MS * targetBrightness / 255`. A fade to 50% brightness takes ~250ms, a fade to full takes 500ms. Minimum floor of 50ms prevents invisible short fades.
 
 ```cpp
 enum Mode {
-  MODE_MOTION,
+  MODE_PRESENCE,
   MODE_MANUAL
 };
 ```
 
-An enum is a type that can only be one of a set of values. Like a TypeScript union type: `type Mode = 'motion' | 'manual'`.
+An enum is a type that can only be one of a set of values. Like a TypeScript union type: `type Mode = 'presence' | 'manual'`.
 
 ---
 
@@ -203,8 +200,8 @@ static bool radarNeedsConfig() {
     return true;
   }
   for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (radar.motion_sensitivity[gate] != RADAR_GATE_SENSITIVITY ||
-        radar.stationary_sensitivity[gate] != RADAR_GATE_SENSITIVITY) {
+    if (radar.motion_sensitivity[gate] != RADAR_MOTION_SENSITIVITY ||
+        radar.stationary_sensitivity[gate] != RADAR_STATIONARY_SENSITIVITY) {
       return true;
     }
   }
@@ -265,25 +262,27 @@ Both count as "presence" for our purposes.
 ### State Variables
 
 ```cpp
-static Mode currentMode = MODE_MOTION;
-static MotionState motionState = MOTION_IDLE;
+static Mode currentMode = MODE_PRESENCE;
+static PresenceState presenceState = PRESENCE_IDLE;
 static uint8_t currentBrightness = 0;
 static uint8_t targetBrightness = 0;
-static bool lightOn = false;
-static unsigned long lastMotionTime = 0;
-static unsigned long cooldownStartTime = 0;
+static bool lastPresence = false;
+
+static uint8_t fadeStartBrightness = 0;
+static unsigned long fadeStartTime = 0;
+static bool fading = false;
 ```
 
 These persist across `loop()` calls (via `static`). They represent the complete state of the system:
 
 | Variable | Type | Purpose |
 |----------|------|---------|
-| `currentMode` | Mode | MOTION or MANUAL |
-| `motionState` | MotionState | IDLE, ACTIVE, or COOLDOWN |
+| `currentMode` | Mode | PRESENCE or MANUAL |
+| `presenceState` | PresenceState | IDLE or ACTIVE |
 | `currentBrightness` | 0–255 | What the LED is currently at |
 | `targetBrightness` | 0–255 | What we're fading toward |
-| `lightOn` | bool | Whether the light should be on at all |
-| `lastMotionTime` | millis() | When motion was last detected |
+| `lastPresence` | bool | Previous presence state (for edge detection) |
+| `fading` | bool | Whether a fade is in progress |
 
 ### Setup
 
