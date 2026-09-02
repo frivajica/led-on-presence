@@ -23,9 +23,18 @@ static bool lastPresence = false;
 static uint8_t fadeStartBrightness = 0;
 static unsigned long fadeStartTime = 0;
 static bool fading = false;
+static unsigned long lastPresenceTime = 0;
 
 Mode getMode() {
   return currentMode;
+}
+
+int getCountdown() {
+  if (presenceState == PRESENCE_ACTIVE) return 0;
+  unsigned long elapsed = millis() - lastPresenceTime;
+  unsigned long idleMs = (unsigned long)RADAR_IDLE_TIME * 1000;
+  if (elapsed >= idleMs) return 0;
+  return (idleMs - elapsed) / 1000 + 1;
 }
 
 static void fadeStart(uint8_t target) {
@@ -59,6 +68,7 @@ static void updatePresenceState(int potValue, bool presence) {
   }
   if (presence) {
     presenceState = PRESENCE_ACTIVE;
+    lastPresenceTime = millis();
     setLightOn(true);
   } else {
     presenceState = PRESENCE_IDLE;

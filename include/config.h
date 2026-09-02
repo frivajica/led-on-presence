@@ -16,7 +16,7 @@
 #define RADAR_MAX_GATE     8    // Detect across full range (~6m)
 #define RADAR_MOTION_SENSITIVITY      10  // Movement detection threshold (0-100, lower = more sensitive)
 #define RADAR_STATIONARY_SENSITIVITY   1  // Breathing/still presence threshold (lower = more sensitive)
-#define RADAR_IDLE_TIME    10   // Seconds target must be absent before "no one" reported
+#define RADAR_IDLE_TIME    1    // Seconds target must be absent before "no one" reported
 
 // --- Gas Sensor (Steren ARD-352 / MQ-2) ---
 #define PIN_GAS_DIGITAL    14   // Digital output: LOW = gas detected
@@ -40,5 +40,6 @@ enum Mode {
 };
 
 Mode getMode();
+int getCountdown();
 
 #endif
