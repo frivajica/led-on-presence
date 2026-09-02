@@ -139,7 +139,7 @@ void loop() {
 
   int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
 
-  if ((int)target != (int)targetBrightness) {
+  if (abs((int)target - (int)targetBrightness) > 2) {
     fadeStart(target);
   }
   fadeUpdate();
