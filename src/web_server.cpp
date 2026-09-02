@@ -31,7 +31,6 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="row"><span class="label">Mode</span><span id="mode">-</span></div>
   <div class="row"><span class="label">Motion</span><span id="motion">-</span></div>
   <div class="row"><span class="label">Presence</span><span id="pres">-</span></div>
-  <div class="row"><span class="label">Countdown</span><span id="countdown">-</span></div>
   <div class="row"><span class="label">Distance</span><span id="dist">-</span></div>
   <div class="row"><span class="label">Light</span><span id="light">-</span></div>
   <div class="row"><span class="label">Brightness</span><span id="bright">-</span></div>
@@ -50,8 +49,6 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('motion').className = d.motion ? 'on' : 'off';
         document.getElementById('pres').textContent = d.presence ? 'YES' : 'NO';
         document.getElementById('pres').className = d.presence ? 'on' : 'off';
-        document.getElementById('countdown').textContent = d.countdown > 0 ? d.countdown + 's' : '-';
-        document.getElementById('countdown').className = d.countdown > 0 ? 'off' : '';
         document.getElementById('dist').textContent = d.presence ? d.distance + ' cm' : '-';
         document.getElementById('light').textContent = d.lightOn ? 'ON' : 'OFF';
         document.getElementById('light').className = d.lightOn ? 'on' : 'off';
@@ -84,7 +81,6 @@ void webServerSetup() {
     doc["mode"] = getMode() == MODE_PRESENCE ? "PRESENCE" : "MANUAL";
     doc["motion"] = radarMotionDetected();
     doc["presence"] = radarPresenceDetected();
-    doc["countdown"] = getCountdown();
     doc["distance"] = radarDetectedDistance();
     doc["lightOn"] = isLightOn();
     doc["brightness"] = getCurrentBrightness();
