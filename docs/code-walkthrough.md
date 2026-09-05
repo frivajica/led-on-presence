@@ -15,8 +15,6 @@ led-multisensor/
 │   ├── radar.h / .cpp          # LD2410C radar communication and config
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
 │   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
-│   ├── gas_sensor.h / .cpp     # Steren ARD-352 gas sensor reading
-│   ├── temperature_sensor.h / .cpp # Steren ARD-360 temp/humidity (DHT11)
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/                       # This documentation
 ```
@@ -49,7 +47,7 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 ```cpp
 #define PIN_POTENTIOMETER  34
 #define PIN_BUTTON         27
-#define PIN_MOSFET         25
+#define PIN_MOSFET         23
 #define PIN_MODE_LED        2
 
 #define PIN_RADAR_RX       16
@@ -63,7 +61,7 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 
 `#define` is C's way of creating named constants. At compile time, every `PIN_MOSFET` is replaced with `25`. This is like `const PIN_MOSFET = 25` in JavaScript, but happens at compile time (zero runtime cost).
 
-**Why GPIO 25 for the MOSFET?** It's PWM-capable. On the ESP32, all digital pins can do PWM via LEDC channels, but GPIO 25 is a safe choice — no boot conflicts, no special functions.
+**Why GPIO 23 for the MOSFET?** It's PWM-capable. On the ESP32, all digital pins can do PWM via LEDC channels, but GPIO 23 is a safe choice — no boot conflicts, no special functions.
 
 **Why GPIO 16/17 for radar?** These are the default UART2 RX/TX pins on ESP32. Using hardware UART means no SoftwareSerial timing issues.
 
@@ -249,6 +247,8 @@ bool radarPresenceDetected() {
 
 `radar.read()` pulls available bytes from Serial2, parses complete frames, and updates the sensor's internal state. `presenceDetected()` returns `true` if the sensor sees a moving OR stationary target.
 
+**Connection freshness:** `radar.isConnected()` checks whether a valid data frame was received within the last 3 seconds. If the sensor stops sending data (unplugged, baud mismatch, or firmware crash), it returns `false` and the web UI shows "Radar: OFFLINE".
+
 The LD2410C uses two detection channels:
 - **Moving targets** — detected via Doppler frequency shift
 - **Stationary targets** — detected via micro-movements (breathing, slight posture changes)
@@ -281,7 +281,7 @@ These persist across `loop()` calls (via `static`). They represent the complete 
 | `presenceState` | PresenceState | IDLE or ACTIVE |
 | `currentBrightness` | 0–255 | What the LED is currently at |
 | `targetBrightness` | 0–255 | What we're fading toward |
-| `lastPresence` | bool | Previous presence state (for edge detection) |
+| `lastPresence` | bool | Previous presence state (for serial output and web UI updates) |
 | `fading` | bool | Whether a fade is in progress |
 
 ### Setup
@@ -294,7 +294,7 @@ void setup() {
   setupRadar();
 
   Serial.println(F("LED-on-presence started"));
-  Serial.println(F("Mode: MOTION (default)"));
+  Serial.println(F("Mode: PRESENCE (default)"));
 }
 ```
 
@@ -307,15 +307,15 @@ void setup() {
 ```cpp
 void loop() {
   if (readButton()) {
-    currentMode = (currentMode == MODE_MOTION) ? MODE_MANUAL : MODE_MOTION;
+    currentMode = (currentMode == MODE_PRESENCE) ? MODE_MANUAL : MODE_PRESENCE;
     Serial.print(F("Mode: "));
-    Serial.println(currentMode == MODE_MOTION ? F("MOTION") : F("MANUAL"));
+    Serial.println(currentMode == MODE_PRESENCE ? F("PRESENCE") : F("MANUAL"));
   }
 
   int potValue = readPotentiometer();
   bool presence = radarPresenceDetected();
 
-  updateMotionState(potValue, presence);
+  updatePresenceState(potValue, presence);
 
   if (lightOn) {
     fadeToward(map(potValue, 0, 1023, 255, 0));
@@ -327,7 +327,6 @@ void loop() {
   setModeLed(currentMode == MODE_MANUAL);
 
   printStatus(potValue, presence);
-  delay(20);
 }
 ```
 
@@ -337,25 +336,20 @@ void loop() {
 
 2. **Read sensors:** Get potentiometer position and radar presence state.
 
-3. **Motion state machine:** `updateMotionState()` handles the three states:
-   - `MOTION_IDLE` → if presence detected, move to ACTIVE, turn light on
-   - `MOTION_ACTIVE` → keep resetting timer while presence detected, fade out after 15s timeout
-   - `MOTION_COOLDOWN` → ignore sensor for 2s (prevents LED heat from re-triggering), then back to IDLE
+3. **Presence state machine:** `updatePresenceState()` handles the two states:
+   - `PRESENCE_IDLE` → if presence detected, move to ACTIVE, turn light on
+   - `PRESENCE_ACTIVE` → if presence goes away, move back to IDLE, turn light off
    - Manual mode → light on if pot > 5, ignore sensor
 
-4. **Fade:** `fadeToward()` gradually moves `currentBrightness` toward the target by `FADE_STEP`. If light is off, target is 0.
+4. **Fade:** `fadeToward()` uses time-based fading with `FADE_MAX_MS`. It calculates the fraction of time elapsed since the fade started and interpolates brightness linearly from `fadeStartBrightness` to the target. Duration scales with target brightness: `FADE_MAX_MS * target / 255`.
 
 5. **Output:** Write PWM value to MOSFET, update mode LED.
 
-6. **Debug:** `printStatus()` prints sensor state every 500ms (not every loop, which would flood the serial monitor).
+6. **Debug:** `printStatus()` prints sensor state every 500ms (not every loop, which would flood the serial monitor), including a loop counter.
 
 **`map()` function:** Scales a number from one range to another. `map(potValue, 0, 1023, 255, 0)` converts the potentiometer's 0–1023 range to PWM's 255–0 range (inverted for clockwise = dimmer).
 
-**`fadeToward()` helper:** Gradually moves `currentBrightness` toward the target by `FADE_STEP`. `min()` and `max()` clamp the value so it doesn't overshoot. The `(int)` casts are needed because ESP32's C++14 compiler is strict about mixed types in `min()`/`max()`.
-
-**`delay(20)`:** 20ms per loop = 50 loops per second. This controls the fade speed. With `FADE_STEP = 5`, the LED ramps from 0 to 255 in about 1 second.
-
-**Why not use `delay(15000)` for the 15s timeout?** Because `delay()` blocks everything. While waiting, the ESP32 can't read the button or update the fade. The `millis()` approach is non-blocking — the loop keeps running, checking the time elapsed.
+**`fadeToward()` helper:** Computes elapsed time since fade start, determines total fade duration based on target brightness, and linearly interpolates `currentBrightness`. `min()` and `max()` clamp the value so it doesn't overshoot. When the target is reached, `fading` is set to `false`.
 
 ---
 
@@ -392,7 +386,7 @@ void wifiLoop() {
 }
 ```
 
-Non-blocking WiFi with 10-second timeout on boot. If WiFi fails, the device continues working locally (gas sensor, radar, light all work offline). Reconnection attempts every 5 seconds in the background.
+Non-blocking WiFi with 10-second timeout on boot. If WiFi fails, the device continues working locally (radar, light, button, pot all work offline). Reconnection attempts every 5 seconds in the background.
 
 ---
 
@@ -406,62 +400,27 @@ When MQTT connects, the device publishes JSON config messages to `homeassistant/
 
 Every 2 seconds, the device publishes:
 - Presence state (ON/OFF)
-- Light state (ON/OFF + brightness)
-- Gas level + alarm
-- Potentiometer value
 - Radar distance
+- Light state (ON/OFF + brightness)
+- Potentiometer value
 
 ### Command Subscription
 
-Subscribes to `led-on-presence/config/gas_threshold/set` — when HA sends a number, the device stores it in flash (ESP32 Preferences library) and uses it as the new alarm threshold.
+Subscribes to `led-on-presence/config/mode/set` — when HA sends "PRESENCE" or "MANUAL", the device switches modes.
 
 ### Graceful Degradation
 
-If MQTT broker is unreachable, the device continues without Home Assistant integration. All local functionality (radar, gas, light, button, pot, web UI) works independently.
-
----
-
-## `src/gas_sensor.cpp` — Steren ARD-352 / MQ-2
-
-```cpp
-void setupGasSensor() {
-  pinMode(PIN_GAS_DIGITAL, INPUT);
-  prefs.begin("gas", false);
-  uint16_t stored = prefs.getUShort("threshold", 0);
-  if (stored > 0) alarmThreshold = stored;
-}
-```
-
-Reads both the digital pin (instant alarm) and analog pin (concentration level). The alarm threshold is persisted to flash via ESP32's Preferences library — survives reboots and can be updated via MQTT.
-
-**Warmup note:** The MQ-2 heater needs 20–48 hours on first use for stable readings. The first few readings will be high and gradually settle.
-
----
-
-## `src/temperature_sensor.cpp` — Steren ARD-360 / DHT11
-
-```cpp
-static DHT dht(PIN_DHT, DHT11);
-
-void setupTemperatureSensor() {
-  dht.begin();
-}
-
-bool temperaturePoll() {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  // ...
-}
-```
-
-The DHT11 is slow — firmware limits reads to once per 10 seconds (`DHT_READ_INTERVAL`). Each `temperaturePoll()` call checks the interval internally. The Adafruit DHT library handles the single-wire protocol. If a read fails (returns NaN), the previous valid value is kept.
+If MQTT broker is unreachable, the device continues without Home Assistant integration. All local functionality (radar, light, button, pot, web UI) works independently.
 
 ---
 
 ## `src/web_server.cpp` — Debug Web UI
 
 Serves a minimal HTML page at `http://<esp32-ip>` with:
-- Live sensor values (presence, gas, brightness, distance, temperature, humidity)
+- Mode (PRESENCE or MANUAL)
+- Radar connection status (ONLINE / OFFLINE)
+- Motion state, Presence state, Distance
+- Light state, Brightness, Potentiometer value
 - Light toggle button
 - Auto-refreshes every second
 
@@ -480,7 +439,7 @@ Also exposes `GET /api/status` (JSON) and `POST /api/toggle` for programmatic ac
 | `Date.now()` | `millis()` |
 | `const` / `let` | `#define` / `static` variables |
 | `useEffect(fn, [])` | `setup()` |
-| `setInterval(fn, 10)` | `loop()` + `delay(20)` |
+| `setInterval(fn, 10)` | `loop()` (non-blocking) |
 | CSS `opacity: 0.5` | `analogWrite(pin, 127)` |
 | `element.style.opacity` | `analogWrite(pin, value)` |
 | TypeScript type | `enum` / `#define` |

@@ -71,7 +71,7 @@ The strip draws current from the 24V supply. The ESP32 cannot supply this power 
 
 | Pin | Name | Connects To |
 |-----|------|------------|
-| 1 | Gate (G) | ESP32 GPIO 25 (PWM) |
+| 1 | Gate (G) | ESP32 GPIO 23 (PWM) |
 | 2 | Drain (D) | LED strip − |
 | 3 | Source (S) | Common GND |
 
@@ -194,112 +194,24 @@ Button leg 2 → GND
 
 ---
 
-## Steren ARD-352 Gas Sensor (MQ-2)
 
-**What it is:** A smoke and flammable gas sensor based on the MQ-2 semiconductor. Detects LPG, smoke, alcohol, propane, hydrogen, methane, and carbon monoxide.
-
-**Why ARD-352:** Inexpensive, widely available (Steren), analog + digital output, works with 5V.
-
-**Key specs:**
-- **Detection gases:** LPG, smoke, alcohol, propane, hydrogen, methane, CO
-- **Operating voltage:** 5V (heater requires 5V — do NOT power from 3.3V)
-- **Output:** Analog (0–5V proportional to concentration) + Digital (LOW when gas detected)
-- **Warmup time:** ~20 seconds for readable values, 48 hours for full calibration
-
-**How it works:**
-1. Internal heater heats a tin dioxide (SnO₂) semiconductor
-2. In clean air, conductivity is low → high resistance → low voltage output
-3. When gas is present, conductivity increases → resistance drops → voltage rises
-4. The ESP32 reads this voltage via `analogRead()` on the analog pin
-5. The digital pin goes LOW when concentration exceeds the onboard potentiometer threshold
-
-**Pinout:**
-
-```
-    ARD-352 Module
-    ┌──────────────┐
-    │   ○  ○  ○  ○ │
-    │  VCC DO AO GND│
-    └──────────────┘
-```
-
-| Pin | Connects To | Notes |
-|-----|------------|-------|
-| VCC | 5V (from LM2596) | Heater needs 5V — NOT 3.3V |
-| GND | Common GND | |
-| DO | ESP32 GPIO 14 | Digital: LOW = gas detected |
-| AO | ESP32 GPIO 32 | Analog: voltage ∝ concentration |
-
-**Important notes:**
-- First-time warmup takes 24–48 hours for the heater to stabilize. Readings will be high initially.
-- After warmup, power-cycle warmup is ~2 minutes.
-- The onboard potentiometer adjusts the digital output sensitivity threshold (not the analog range).
-- The alarm threshold in firmware is configurable via MQTT from Home Assistant.
-
----
-
-## Steren ARD-360 Temperature & Humidity Sensor (DHT11)
-
-**What it is:** A digital temperature and humidity sensor based on the DHT11. Measures ambient room conditions.
-
-**Why ARD-360:** Inexpensive, available at Steren stores, works from 3.3V, one-pin digital interface.
-
-**Key specs:**
-- **Supply voltage:** 3.3–5.5V (works from ESP32's 3.3V rail)
-- **Temperature range:** 0–50°C
-- **Humidity range:** 20–90% RH
-- **Resolution:** 1°C / 1% RH
-- **Tolerance:** ±2°C / ±5% RH
-- **Read rate:** Max once per 2 seconds (firmware reads every 10s)
-
-**How it works:**
-1. Internal capacitive humidity sensor + NTC thermistor take readings
-2. A small MCU inside the DHT11 converts analog values to digital
-3. Data is transmitted over a proprietary single-wire protocol on the data pin
-4. The ESP32 requests a reading every 10 seconds (DHT11 is slow)
-5. Both temperature and humidity come from the same data pin
-
-**Pinout:**
-
-```
-    ARD-360 Module
-    ┌──────────────┐
-    │   ○  ○  ○  ○ │
-    │  VCC NC DT GND│
-    └──────────────┘
-```
-
-| Pin | Connects To | Notes |
-|-----|------------|-------|
-| VCC | ESP32 3V3 | Works fine from 3.3V |
-| DT | ESP32 GPIO 13 | Digital data (single-wire protocol) |
-| GND | Common GND | |
-| NC | Not connected | |
-
-**Important notes:**
-- DHT11 reads slowly — firmware limits reads to once per 10 seconds
-- First reading after boot may fail; subsequent reads are stable
-- ±5% RH tolerance is not lab-grade, but sufficient for room monitoring
-- Exposed to air — place away from heat sources (LED strip, MOSFET) for accurate readings
-
----
 
 ## Summary: The Signal Chain
 
 ```
-Motion detected
+Presence detected
     → LD2410C radar detects presence via UART
         → ESP32 GPIO 16 reads data frame
             → ESP32 sets target brightness from potentiometer
                 → ESP32 ramps currentBrightness toward target
-                    → ESP32 outputs PWM on GPIO 25 (0-3.3V, varying duty cycle)
+                    → ESP32 outputs PWM on GPIO 23 (0-3.3V, varying duty cycle)
                         → IRLZ44N Gate receives PWM signal
                             → MOSFET switches 24V circuit at PWM frequency
                                 → LED strip receives average voltage = dimmed light
 
 Button pressed
     → ESP32 GPIO 27 reads LOW
-        → Mode toggles (MOTION ↔ MANUAL)
+        → Mode toggles (PRESENCE ↔ MANUAL)
 
 Potentiometer turned
     → ESP32 GPIO 34 reads 0–1023

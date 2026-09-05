@@ -23,7 +23,7 @@
 | 7 | Momentary push button | 1 |
 | 8 | 24V DC Power Supply | 1 |
 | 9 | Protoboard (40x60mm) | 1 |
-| 10 | Jumper wires (male-to-male, male-to-female) | ~12 |
+| 10 | Jumper wires (male-to-male, male-to-female) | ~10 |
 | 11 | USB cable (Type-C or Micro-USB depending on board) | 1 |
 | 12 | Multimeter (recommended) | 1 |
 
@@ -85,7 +85,7 @@ The MOSFET switches the 24V circuit using a PWM signal from the ESP32.
 
 | MOSFET Pin | Name | Connect To |
 |------------|------|-----------|
-| 1 | Gate (G) | ESP32 GPIO 25 |
+| 1 | Gate (G) | ESP32 GPIO 23 |
 | 2 | Drain (D) | LED strip − (black wire) |
 | 3 | Source (S) | Common GND |
 
@@ -156,62 +156,7 @@ The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationa
 
 ---
 
-## Step 5: Gas Sensor (Steren ARD-352) → ESP32
-
-The gas sensor has 4 pins: VCC, GND, DO (digital), AO (analog).
-
-```
-    Steren ARD-352 Gas Sensor
-    ┌──────────────┐
-    │   ○  ○  ○  ○ │
-    │  VCC DO AO GND│
-    └──────────────┘
-         │   │   │
-         │   │   └──→ ESP32 GPIO 32 (analog, ADC1)
-         │   └──────→ ESP32 GPIO 14 (digital input)
-         └──────────→ 5V (from LM2596, NOT 3.3V — heater needs 5V)
-```
-
-| Sensor Pin | Connects To | Notes |
-|------------|-----------|-------|
-| VCC | 5V (from LM2596 output or USB) | Heater requires 5V — do NOT use 3.3V |
-| GND | Common GND | |
-| DO | ESP32 GPIO 14 | Digital: LOW when gas detected, HIGH when clear |
-| AO | ESP32 GPIO 32 | Analog: voltage proportional to gas concentration |
-
-**Important:** The gas sensor's VCC must come from the 5V rail (LM2596 output), not the 3.3V rail. The internal heater needs 5V to function.
-
-**Warmup:** On first power-up, wait at least 20 seconds before taking readings. For accurate calibration, leave powered for 24–48 hours. Subsequent power-cycles need ~2 minutes warmup.
-
----
-
-## Step 6: Temperature/Humidity Sensor (Steren ARD-360) → ESP32
-
-The ARD-360 is a DHT11 sensor with 4 pins: VCC, NC (not connected), Data, GND.
-
-```
-    Steren ARD-360 Temp/Humidity Sensor
-    ┌──────────────┐
-    │   ○  ○  ○  ○ │
-    │  VCC NC DT GND│
-    └──────────────┘
-         │      │
-         │      └──────→ ESP32 GPIO 13 (digital data)
-         └──────────────→ ESP32 3V3
-```
-
-| Sensor Pin | Connects To | Notes |
-|------------|-----------|-------|
-| VCC | ESP32 3V3 | Works from 3.3V |
-| DT | ESP32 GPIO 13 | Single-wire digital data |
-| GND | Common GND | |
-| NC | Not connected | |
-
-**Note:** Place the sensor away from heat sources (LED strip, MOSFET, buck converter) for accurate room temperature readings.
-
----
-
-## Step 7: Button → ESP32
+## Step 5: Button → ESP32
 
 ```
     ┌─────────┐
@@ -234,7 +179,7 @@ The button connects the two legs when pressed. We use `INPUT_PULLUP` in code, so
 
 ---
 
-## Step 8: LED Strip → 24V Circuit
+## Step 6: LED Strip → 24V Circuit
 
 This is where you switch the high voltage. **Keep these wires away from the ESP32 side wires.**
 
@@ -264,7 +209,7 @@ When the MOSFET is ON (Gate = HIGH), current flows from 24V+ through the LED str
 
 ---
 
-## Step 9: Common Ground
+## Step 7: Common Ground
 
 This is the most critical connection. **All grounds must be connected:**
 
@@ -310,7 +255,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │                  │
                     │ GPIO27 ──────────┼──── Button Leg A
                     │                  │
-                    │ GPIO25 ──────────┼──── MOSFET Gate
+                     │ GPIO23 ──────────┼──── MOSFET Gate
                     │                  │
                     │ GPIO2 ───────────┼──── (built-in blue LED, mode indicator)
                     └──────────────────┘
@@ -328,7 +273,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │  IRLZ44N         │
                     │  (TO-220)        │
                     │                  │
-                    │  Gate ───────────┼──── ESP32 GPIO 25
+                     │  Gate ───────────┼──── ESP32 GPIO 23
                     │  Drain ──────────┼──── LED Strip −
                     │  Source ─────────┼──── Common GND
                     └──────────────────┘
@@ -366,18 +311,16 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 
 1. ✅ LM2596 output adjusted to 5.0V (measured with multimeter)
 2. ✅ All grounds connected (24V−, ESP32 GND, MOSFET Source)
-3. ✅ MOSFET Gate → ESP32 GPIO 25
+3. ✅ MOSFET Gate → ESP32 GPIO 23
 4. ✅ MOSFET Drain → LED strip −
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
 7. ✅ Potentiometer wired correctly (3.3V, GPIO 34, GND)
 8. ✅ LD2410C wired correctly (3V3, GPIO 16, GPIO 17 — direct, no voltage divider!)
 9. ✅ Button wired correctly (GPIO 27, GND)
-10. ✅ Gas sensor wired correctly (5V from LM2596, GPIO 14, GPIO 32, GND)
-11. ✅ Temp/humidity sensor wired correctly (3V3, GPIO 13, GND)
-12. ✅ No wire crosses between ESP32 side and 24V side
-13. ✅ 24V supply is UNPLUGGED from wall outlet
-14. ✅ USB is DISCONNECTED (using LM2596 for power)
+10. ✅ No wire crosses between ESP32 side and 24V side
+11. ✅ 24V supply is UNPLUGGED from wall outlet
+12. ✅ USB is DISCONNECTED (using LM2596 for power)
 
 ---
 
@@ -387,9 +330,9 @@ You can test the logic before connecting the 24V supply:
 
 1. Connect USB to ESP32 (do NOT connect 24V)
 2. Connect all inputs (potentiometer, LD2410C, button)
-3. Connect MOSFET Gate to GPIO 25 (leave Drain and Source disconnected)
+3. Connect MOSFET Gate to GPIO 23 (leave Drain and Source disconnected)
 4. Open serial monitor (`pio device monitor` — 115200 baud)
-5. You should see `LED-on-presence started` and `Mode: MOTION`
+5. You should see `LED-on-presence started` and `Mode: PRESENCE`
 6. The radar should initialize and show `Radar: config OK` (or `Radar: configured` on first boot)
 7. Walk in front of sensor → serial should show `Pres: Y` with distance
 8. Turn the potentiometer → serial should show brightness value changing
