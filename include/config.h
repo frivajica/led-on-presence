@@ -6,7 +6,7 @@
 // --- Pin Definitions (ESP32 DevKit V1) ---
 #define PIN_POTENTIOMETER  34   // Potentiometer wiper (ADC1, WiFi-safe)
 #define PIN_BUTTON         27   // Mode toggle button (uses INPUT_PULLUP)
-#define PIN_MOSFET         23   // IRLZ44N Gate — PWM output to LED strip
+#define PIN_MOSFET         25   // IRLZ44N Gate — PWM output to LED strip
 #define PIN_MODE_LED        2   // Built-in blue LED — indicates current mode
 
 // --- LD2410C Radar Sensor (HardwareSerial2) ---

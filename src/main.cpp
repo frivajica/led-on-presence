@@ -50,12 +50,22 @@ static void fadeUpdate() {
 }
 
 static void updatePresenceState(int potValue, bool presence) {
+  // Pot deadzone: last 5 counts at the dim end (CW on inverted pot) = OFF.
+  // This gives a small physical dead-zone before the light turns off.
+  bool potEnabled = potValue < 1019;
+
   if (currentMode != MODE_PRESENCE) {
-    setLightOn(potValue > 5);
+    setLightOn(potEnabled);
     presenceState = PRESENCE_IDLE;
     return;
   }
-  if (presence) {
+
+  // In presence mode, the pot is the master brightness control. If it's in
+  // the off deadzone, stay off even when presence is detected.
+  if (!potEnabled) {
+    presenceState = PRESENCE_IDLE;
+    setLightOn(false);
+  } else if (presence) {
     presenceState = PRESENCE_ACTIVE;
     setLightOn(true);
   } else {
@@ -131,6 +141,7 @@ void loop() {
   updatePresenceState(potValue, presence);
 
   int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
+  if (target < 5) target = 0;  // Snap to fully off below visible threshold
 
   if (presence != lastPresence) {
     fadeStart(target);

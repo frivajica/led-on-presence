@@ -13,8 +13,14 @@ void setupInputs() {
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 }
 
+// Average 8 samples to reduce ADC electrical noise. Each sample is fast
+// (~10 µs), so 8 reads take < 100 µs — no perceptible delay.
 int readPotentiometer() {
-  lastPotValue = analogRead(PIN_POTENTIOMETER);
+  long sum = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    sum += analogRead(PIN_POTENTIOMETER);
+  }
+  lastPotValue = sum / 8;
   return lastPotValue;
 }
 

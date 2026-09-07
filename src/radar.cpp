@@ -8,7 +8,7 @@ static bool sensorReady = false;
 
 // LD2410 command: leave configuration mode (restore data mode).
 // Sent defensively at boot in case a previous power loss left the sensor stuck
-// in config mode. Ignored when already in data mode.
+// in config mode. Ignored by the sensor when already in data mode.
 static const byte CMD_LEAVE_CONFIG[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
 
 static bool radarNeedsConfig() {
@@ -35,7 +35,9 @@ void setupRadar() {
   delay(500);
   while (Serial2.available()) Serial2.read();
 
-  sensorReady = radar.begin(Serial2, false);
+  // Enable library command debugging to diagnose communication issues.
+  // Remove or comment out once radar is working reliably.
+  radar.debug(Serial);
 
   // Defensive: recover a sensor left stuck in config mode (e.g. power lost
   // mid-configuration). Ignored by the sensor when already in data mode.
@@ -44,8 +46,42 @@ void setupRadar() {
   delay(100);
   while (Serial2.available()) Serial2.read();
 
-  if (!radar.requestCurrentConfiguration()) {
-    Serial.println(F("Radar: cfg query FAIL"));
+  // begin(true) tries requestFirmwareVersion() to verify the sensor actually
+  // responds. If this fails, the wiring or baud rate is wrong.
+  sensorReady = radar.begin(Serial2, true);
+
+  if (!sensorReady) {
+    Serial.println(F("Radar: no response to firmware query — check wiring/baud rate"));
+    // Still try autoReadTask: sensor might send data frames even if config
+    // commands are locked (e.g. wrong password, firmware variant).
+    radar.autoReadTask();
+    return;
+  }
+
+  Serial.print(F("Radar: firmware v"));
+  Serial.print(radar.firmware_major_version);
+  Serial.print('.');
+  Serial.print(radar.firmware_minor_version);
+  Serial.print('.');
+  Serial.println(radar.firmware_bugfix_version, HEX);
+
+  // Try config query with retries — sometimes the sensor needs a moment.
+  bool configOk = false;
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      Serial.print(F("Radar: cfg retry #"));
+      Serial.println(attempt + 1);
+      delay(200);
+    }
+    if (radar.requestCurrentConfiguration()) {
+      configOk = true;
+      break;
+    }
+  }
+
+  if (!configOk) {
+    Serial.println(F("Radar: cfg query FAIL — using factory defaults"));
+    radar.autoReadTask();
     return;
   }
 
