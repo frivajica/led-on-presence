@@ -85,7 +85,7 @@ The MOSFET switches the 24V circuit using a PWM signal from the ESP32.
 
 | MOSFET Pin | Name | Connect To |
 |------------|------|-----------|
-| 1 | Gate (G) | ESP32 GPIO 23 |
+| 1 | Gate (G) | ESP32 GPIO 25 |
 | 2 | Drain (D) | LED strip − (black wire) |
 | 3 | Source (S) | Common GND |
 
@@ -273,7 +273,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │  IRLZ44N         │
                     │  (TO-220)        │
                     │                  │
-                     │  Gate ───────────┼──── ESP32 GPIO 23
+                      │  Gate ───────────┼──── ESP32 GPIO 25
                     │  Drain ──────────┼──── LED Strip −
                     │  Source ─────────┼──── Common GND
                     └──────────────────┘
@@ -311,7 +311,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 
 1. ✅ LM2596 output adjusted to 5.0V (measured with multimeter)
 2. ✅ All grounds connected (24V−, ESP32 GND, MOSFET Source)
-3. ✅ MOSFET Gate → ESP32 GPIO 23
+3. ✅ MOSFET Gate → ESP32 GPIO 25
 4. ✅ MOSFET Drain → LED strip −
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
@@ -330,7 +330,7 @@ You can test the logic before connecting the 24V supply:
 
 1. Connect USB to ESP32 (do NOT connect 24V)
 2. Connect all inputs (potentiometer, LD2410C, button)
-3. Connect MOSFET Gate to GPIO 23 (leave Drain and Source disconnected)
+3. Connect MOSFET Gate to GPIO 25 (leave Drain and Source disconnected)
 4. Open serial monitor (`pio device monitor` — 115200 baud)
 5. You should see `LED-on-presence started` and `Mode: PRESENCE`
 6. The radar should initialize and show `Radar: config OK` (or `Radar: configured` on first boot)

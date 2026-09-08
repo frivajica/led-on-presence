@@ -47,7 +47,7 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 ```cpp
 #define PIN_POTENTIOMETER  34
 #define PIN_BUTTON         27
-#define PIN_MOSFET         23
+#define PIN_MOSFET         25
 #define PIN_MODE_LED        2
 
 #define PIN_RADAR_RX       16
@@ -61,7 +61,7 @@ Equivalent in web terms: this is your `package.json` — it defines the build en
 
 `#define` is C's way of creating named constants. At compile time, every `PIN_MOSFET` is replaced with `25`. This is like `const PIN_MOSFET = 25` in JavaScript, but happens at compile time (zero runtime cost).
 
-**Why GPIO 23 for the MOSFET?** It's PWM-capable. On the ESP32, all digital pins can do PWM via LEDC channels, but GPIO 23 is a safe choice — no boot conflicts, no special functions.
+**Why GPIO 25 for the MOSFET?** It's PWM-capable. On the ESP32, all digital pins can do PWM via LEDC channels, but GPIO 25 is a safe choice — no boot conflicts, no special functions.
 
 **Why GPIO 16/17 for radar?** These are the default UART2 RX/TX pins on ESP32. Using hardware UART means no SoftwareSerial timing issues.
 

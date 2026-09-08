@@ -71,7 +71,7 @@ The strip draws current from the 24V supply. The ESP32 cannot supply this power 
 
 | Pin | Name | Connects To |
 |-----|------|------------|
-| 1 | Gate (G) | ESP32 GPIO 23 (PWM) |
+| 1 | Gate (G) | ESP32 GPIO 25 (PWM) |
 | 2 | Drain (D) | LED strip − |
 | 3 | Source (S) | Common GND |
 
@@ -204,7 +204,7 @@ Presence detected
         → ESP32 GPIO 16 reads data frame
             → ESP32 sets target brightness from potentiometer
                 → ESP32 ramps currentBrightness toward target
-                    → ESP32 outputs PWM on GPIO 23 (0-3.3V, varying duty cycle)
+                     → ESP32 outputs PWM on GPIO 25 (0-3.3V, varying duty cycle)
                         → IRLZ44N Gate receives PWM signal
                             → MOSFET switches 24V circuit at PWM frequency
                                 → LED strip receives average voltage = dimmed light

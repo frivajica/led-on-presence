@@ -36,8 +36,8 @@ void setupRadar() {
   while (Serial2.available()) Serial2.read();
 
   // Enable library command debugging to diagnose communication issues.
-  // Remove or comment out once radar is working reliably.
-  radar.debug(Serial);
+  // Uncomment only when troubleshooting radar communication.
+  // radar.debug(Serial);
 
   // Defensive: recover a sensor left stuck in config mode (e.g. power lost
   // mid-configuration). Ignored by the sensor when already in data mode.

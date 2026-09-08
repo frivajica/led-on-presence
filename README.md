@@ -23,7 +23,9 @@ Presence-activated 24V COB LED strip with smooth PWM dimming, controlled by an E
 | Momentary push button | 1 | Mode toggle |
 | 24V DC Power Supply | 1 | Powers LED strip + ESP32 (via LM2596) |
 | Breadboard (400 tie-points) | 1 | Prototyping platform |
-| Jumper wires | ~12 | Connections |
+| Protoboard (perfboard) | 1 | Permanent soldered assembly |
+| Jumper wires | ~12 | Prototype connections |
+| Hookup wire (22 AWG) | ~1 m | Protoboard connections |
 
 ## Quick Start
 
@@ -64,7 +66,7 @@ See [docs/wiring.md](docs/wiring.md) for step-by-step connections with diagrams.
 | LM2596 | 24V+ → IN+, 24V− → IN−, OUT+ → ESP32 VIN, OUT− → GND |
 | Potentiometer | 3V3 → left pin, GPIO 34 → middle, GND → right |
 | Button | GPIO 27 → GND (uses INPUT_PULLUP) |
-| IRLZ44N MOSFET | Gate → GPIO 23, Source → GND, Drain → LED− |
+| IRLZ44N MOSFET | Gate → GPIO 25, Source → GND, Drain → LED− |
 | LD2410C | VCC → ESP32 3V3, TX → GPIO 16, RX → GPIO 17, GND → GND |
 | LED strip | + → 24V+, − → MOSFET Drain |
 
@@ -110,7 +112,7 @@ All settings live in `include/config.h`.
 ```cpp
 #define PIN_POTENTIOMETER  34   // ADC1, input-only, WiFi-safe
 #define PIN_BUTTON         27   // Uses INPUT_PULLUP
-#define PIN_MOSFET         23   // PWM-capable
+#define PIN_MOSFET         25   // PWM-capable
 ```
 
 ### Tune the radar sensor
@@ -163,6 +165,31 @@ Mode: PRESENCE (default)
 Loop: 500/s
 Pot: 512 Bright: 127/128 Pres: Y 85cm State: ACTIVE Light: ON
 ```
+
+## Troubleshooting
+
+### Radar not responding (`Radar: cfg query FAIL`)
+
+Some LD2410C units ship with **UART disabled** (Bluetooth-only mode). If the ESP32 can't communicate with the sensor:
+
+1. Download **HLKRadarTool** app (iOS/Android)
+2. Connect to the sensor via Bluetooth
+3. Go to **Settings** → **Restore Factory**
+4. Reboot the ESP32
+
+The factory reset re-enables UART at 256000 baud.
+
+## Moving to Protoboard
+
+Once the breadboard prototype is verified:
+
+1. **Transfer the circuit** to a protoboard (perfboard) using the same connections
+2. **Solder all joints** — no more loose jumper wires
+3. **Use 22 AWG solid-core wire** for power rails and signal lines
+4. **Keep the ESP32 socketed** or use female headers so you can remove it for updates
+5. **Test each section** as you solder: power first, then outputs, then inputs, then radar
+
+See [Wiring](docs/wiring.md) for the exact pin assignments.
 
 ## Docs
 
