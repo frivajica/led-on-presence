@@ -24,11 +24,16 @@ static bool fading = false;
 
 // Presence hysteresis: ignore rapid toggles from electrical noise.
 // The radar can glitch when the MOSFET switches high current (4m LED
-// strip). Require 200ms of stable presence before reacting.
+// strip). Require 400ms of stable presence before reacting.
 static bool rawPresence = false;
 static bool stablePresence = false;
 static unsigned long presenceStableSince = 0;
-static const unsigned long PRESENCE_HYSTERESIS_MS = 200;
+static const unsigned long PRESENCE_HYSTERESIS_MS = 400;
+
+// Potentiometer hysteresis: only accept pot changes > 2 counts.
+// Cheap pots have ADC noise (~2 counts); this prevents brightness jitter
+// at the off end where map() hovers between 0 and 6.
+static int stablePotValue = 0;
 
 Mode getMode() {
   return currentMode;
@@ -58,9 +63,9 @@ static void fadeUpdate() {
 }
 
 static void updatePresenceState(int potValue, bool presence) {
-  // Pot deadzone: last 5 counts at the dim end (CW on inverted pot) = OFF.
-  // This gives a small physical dead-zone before the light turns off.
-  bool potEnabled = potValue < 1019;
+  // Pot deadzone: last ~15 counts at the dim end (CW on inverted pot) = OFF.
+  // Cheap pots rarely reach 1023; 1008 covers the typical 1010-1015 max.
+  bool potEnabled = potValue < 1008;
 
   if (currentMode != MODE_PRESENCE) {
     setLightOn(potEnabled);
@@ -146,7 +151,13 @@ void loop() {
   int potValue = readPotentiometer();
   rawPresence = radarPresenceDetected();
 
-  // Hysteresis filter: only accept presence changes after 200ms of stability.
+  // Potentiometer hysteresis: ignore changes smaller than 3 counts to
+  // eliminate ADC noise jitter at the off end.
+  if (abs(potValue - stablePotValue) > 2) {
+    stablePotValue = potValue;
+  }
+
+  // Hysteresis filter: only accept presence changes after 400ms of stability.
   // This prevents EMI from the 4m LED strip from causing rapid toggles.
   if (rawPresence != stablePresence) {
     presenceStableSince = millis();
@@ -157,13 +168,13 @@ void loop() {
     presence = lastPresence;  // not stable yet, keep previous state
   }
 
-  updatePresenceState(potValue, presence);
+  updatePresenceState(stablePotValue, presence);
 
-  int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
-  if (target < 5) target = 0;  // Snap to fully off below visible threshold
+  int target = isLightOn() ? map(stablePotValue, 0, 1023, 255, 0) : 0;
+  if (target < 15) target = 0;  // Hard off below visible threshold
 
   // Only restart fade when presence direction actually changes.
-  // If the radar glitches (bounces ON→OFF→ON within 200ms) while an
+  // If the radar glitches (bounces ON→OFF→ON within 400ms) while an
   // existing fade is already going the right way, don't restart it.
   if (presence != lastPresence) {
     bool directionChanged = (presence && targetBrightness == 0) ||
@@ -204,8 +215,8 @@ void loop() {
   if (millis() - lastMqttPublish > 2000) {
     lastMqttPublish = millis();
     mqttPublishAll(presence, radarDetectedDistance(), isLightOn(), currentBrightness,
-                   potValue);
+                   stablePotValue);
   }
 
-  printStatus(potValue, rawPresence);
+  printStatus(stablePotValue, rawPresence);
 }
