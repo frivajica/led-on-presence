@@ -18,7 +18,14 @@ void setupOutputs() {
 }
 
 void setBrightness(uint8_t value) {
-  analogWrite(PIN_MOSFET, value);
+  if (value == 0) {
+    // Hard off: digitalWrite gives a solid 0V, ensuring the MOSFET is fully
+    // off. analogWrite(0) can leave a tiny residual duty cycle or keep the
+    // LEDC peripheral active, causing faint glow.
+    digitalWrite(PIN_MOSFET, LOW);
+  } else {
+    analogWrite(PIN_MOSFET, value);
+  }
   lastBrightness = value;
 }
 
