@@ -11,6 +11,22 @@ static bool sensorReady = false;
 // in config mode. Ignored by the sensor when already in data mode.
 static const byte CMD_LEAVE_CONFIG[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
 
+// Per-gate sensitivity: motion/stationary energy drops with distance, so far
+// gates need lower thresholds (more sensitive) to detect people entering from
+// across the room. Gates 0-2 (~0-2.3m) use normal sensitivity; gates 3-5
+// (~2.3-4.5m) are more sensitive; gates 6-8 (~4.5-6m) are most sensitive.
+static uint8_t motionSensitivityForGate(uint8_t gate) {
+  if (gate <= 2) return 15;
+  if (gate <= 5) return 10;
+  return 5;
+}
+
+static uint8_t stationarySensitivityForGate(uint8_t gate) {
+  if (gate <= 2) return 15;
+  if (gate <= 5) return 10;
+  return 5;
+}
+
 static bool radarNeedsConfig() {
   if (radar.max_moving_gate != RADAR_MAX_GATE ||
       radar.max_stationary_gate != RADAR_MAX_GATE ||
@@ -18,8 +34,8 @@ static bool radarNeedsConfig() {
     return true;
   }
   for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (radar.motion_sensitivity[gate] != RADAR_MOTION_SENSITIVITY ||
-        radar.stationary_sensitivity[gate] != RADAR_STATIONARY_SENSITIVITY) {
+    if (radar.motion_sensitivity[gate] != motionSensitivityForGate(gate) ||
+        radar.stationary_sensitivity[gate] != stationarySensitivityForGate(gate)) {
       return true;
     }
   }
@@ -93,7 +109,9 @@ void setupRadar() {
 
   bool ok = true;
   for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (!radar.setGateSensitivityThreshold(gate, RADAR_MOTION_SENSITIVITY, RADAR_STATIONARY_SENSITIVITY)) ok = false;
+    uint8_t motion = motionSensitivityForGate(gate);
+    uint8_t stationary = stationarySensitivityForGate(gate);
+    if (!radar.setGateSensitivityThreshold(gate, motion, stationary)) ok = false;
   }
   if (!radar.setMaxValues(RADAR_MAX_GATE, RADAR_MAX_GATE, RADAR_IDLE_TIME)) ok = false;
   Serial.println(ok ? F("Radar: configured") : F("Radar: config FAIL"));
