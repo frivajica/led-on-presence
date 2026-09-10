@@ -22,6 +22,14 @@ static uint8_t fadeStartBrightness = 0;
 static unsigned long fadeStartTime = 0;
 static bool fading = false;
 
+// Presence hysteresis: ignore rapid toggles from electrical noise.
+// The radar can glitch when the MOSFET switches high current (4m LED
+// strip). Require 200ms of stable presence before reacting.
+static bool rawPresence = false;
+static bool stablePresence = false;
+static unsigned long presenceStableSince = 0;
+static const unsigned long PRESENCE_HYSTERESIS_MS = 200;
+
 Mode getMode() {
   return currentMode;
 }
@@ -136,15 +144,33 @@ void setup() {
 void loop() {
   // PRIORITY 1: LED control — never blocked by network
   int potValue = readPotentiometer();
-  bool presence = radarPresenceDetected();
+  rawPresence = radarPresenceDetected();
+
+  // Hysteresis filter: only accept presence changes after 200ms of stability.
+  // This prevents EMI from the 4m LED strip from causing rapid toggles.
+  if (rawPresence != stablePresence) {
+    presenceStableSince = millis();
+    stablePresence = rawPresence;
+  }
+  bool presence = stablePresence;
+  if (millis() - presenceStableSince < PRESENCE_HYSTERESIS_MS) {
+    presence = lastPresence;  // not stable yet, keep previous state
+  }
 
   updatePresenceState(potValue, presence);
 
   int target = isLightOn() ? map(potValue, 0, 1023, 255, 0) : 0;
   if (target < 5) target = 0;  // Snap to fully off below visible threshold
 
+  // Only restart fade when presence direction actually changes.
+  // If the radar glitches (bounces ON→OFF→ON within 200ms) while an
+  // existing fade is already going the right way, don't restart it.
   if (presence != lastPresence) {
-    fadeStart(target);
+    bool directionChanged = (presence && targetBrightness == 0) ||
+                            (!presence && targetBrightness > 0);
+    if (directionChanged) {
+      fadeStart(target);
+    }
   } else if ((int)target != (int)targetBrightness) {
     if (fading) {
       targetBrightness = target;
@@ -181,5 +207,5 @@ void loop() {
                    potValue);
   }
 
-  printStatus(potValue, presence);
+  printStatus(potValue, rawPresence);
 }
