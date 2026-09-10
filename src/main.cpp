@@ -171,7 +171,7 @@ void loop() {
   updatePresenceState(stablePotValue, presence);
 
   int target = isLightOn() ? map(stablePotValue, 0, 1023, 255, 0) : 0;
-  if (target < 15) target = 0;  // Hard off below visible threshold
+  if (target < 30) target = 0;  // Hard off below visible threshold
 
   // Only restart fade when presence direction actually changes.
   // If the radar glitches (bounces ON→OFF→ON within 400ms) while an
