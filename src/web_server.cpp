@@ -30,6 +30,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="row"><span class="label">Radar</span><span id="radar">-</span></div>
   <div class="row"><span class="label">Motion</span><span id="motion">-</span></div>
   <div class="row"><span class="label">Presence</span><span id="pres">-</span></div>
+  <div class="row"><span class="label">Effective</span><span id="eff">-</span></div>
+  <div class="row"><span class="label">Countdown</span><span id="cd">-</span></div>
   <div class="row"><span class="label">Distance</span><span id="dist">-</span></div>
   <div class="row"><span class="label">Light</span><span id="light">-</span></div>
   <div class="row"><span class="label">Brightness</span><span id="bright">-</span></div>
@@ -45,6 +47,9 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('motion').className = d.motion ? 'on' : 'off';
         document.getElementById('pres').textContent = d.presence ? 'YES' : 'NO';
         document.getElementById('pres').className = d.presence ? 'on' : 'off';
+        document.getElementById('eff').textContent = d.effectivePresence ? 'YES' : 'NO';
+        document.getElementById('eff').className = d.effectivePresence ? 'on' : 'off';
+        document.getElementById('cd').textContent = d.countdownActive ? d.countdownRemaining + 'ms' : '-';
         document.getElementById('dist').textContent = d.presence ? d.distance + ' cm' : '-';
         document.getElementById('light').textContent = d.lightOn ? 'ON' : 'OFF';
         document.getElementById('light').className = d.lightOn ? 'on' : 'off';
@@ -72,6 +77,9 @@ void webServerSetup() {
     doc["radarConnected"] = radarIsConnected();
     doc["motion"] = radarMotionDetected();
     doc["presence"] = radarPresenceDetected();
+    doc["effectivePresence"] = getEffectivePresence();
+    doc["countdownActive"] = getCountdownActive();
+    doc["countdownRemaining"] = getCountdownRemaining();
     doc["distance"] = radarDetectedDistance();
     doc["lightOn"] = isLightOn();
     doc["brightness"] = getCurrentBrightness();

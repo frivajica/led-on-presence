@@ -1,14 +1,15 @@
 # LED-on-presence
 
-Presence-activated 24V COB LED strip with smooth PWM dimming, controlled by an ESP32 and an LD2410C mmWave radar sensor. Connects to Home Assistant via MQTT.
+Presence-activated 24V COB LED strip with smooth PWM dimming, controlled by an ESP32 and an LD2410C mmWave radar sensor. Connects to WiFi for a web dashboard and Arduino OTA updates.
 
 ## How It Works
 
 - **Presence mode** (default): Radar detects presence → light fades up. When presence is lost, light fades out. Potentiometer sets max brightness.
 - **Manual mode**: Potentiometer directly controls brightness (0–100%). Radar is ignored.
 - **Button** toggles between modes. Built-in LED (GPIO 2) is ON in manual mode.
-- **WiFi**: Connects to your network for wireless updates and Home Assistant integration.
+- **WiFi**: Connects to your network for the web UI and OTA updates.
 - **Web UI**: Live sensor dashboard at `http://<esp32-ip>`.
+- **Arduino OTA**: Wireless firmware updates over WiFi.
 
 ## Components
 
@@ -29,15 +30,13 @@ Presence-activated 24V COB LED strip with smooth PWM dimming, controlled by an E
 
 ## Quick Start
 
-### 1. Configure WiFi and MQTT
+### 1. Configure WiFi
 
 Edit `include/secrets.h` (gitignored):
 
 ```cpp
 #define WIFI_SSID       "your-wifi-name"
 #define WIFI_PASSWORD    "your-wifi-password"
-#define MQTT_BROKER_IP   "192.168.1.100"
-#define MQTT_BROKER_PORT 1883
 ```
 
 ### 2. Build and upload
@@ -69,29 +68,6 @@ See [docs/wiring.md](docs/wiring.md) for step-by-step connections with diagrams.
 | IRLZ44N MOSFET | Gate → GPIO 25, Source → GND, Drain → LED− |
 | LD2410C | VCC → ESP32 3V3, TX → GPIO 16, RX → GPIO 17, GND → GND |
 | LED strip | + → 24V+, − → MOSFET Drain |
-
-## Home Assistant Integration
-
-### MQTT Auto-Discovery
-
-Once WiFi + MQTT are configured, the device auto-registers in Home Assistant:
-
-| Entity | Type | Description |
-|--------|------|-------------|
-| `light.led_on_presence` | Light | LED strip (brightness + on/off) |
-| `binary_sensor.presence` | Binary sensor | Radar presence detection |
-| `sensor.radar_distance` | Sensor | Detection distance in cm |
-| `sensor.brightness_pot` | Sensor | Potentiometer position |
-
-### MQTT Topics
-
-```
-led-on-presence/light/state          → {"state":"ON","brightness":128}
-led-on-presence/light/set            → {"state":"ON","brightness":200}
-led-on-presence/binary_sensor/presence/state → "ON" / "OFF"
-led-on-presence/sensor/radar_distance/state  → "85"
-led-on-presence/sensor/brightness_pot/state  → "512"
-```
 
 ### Web UI
 
@@ -133,14 +109,13 @@ led-on-presence/
 ├── platformio.ini              # Build config + libraries
 ├── include/
 │   ├── config.h                # Pin definitions and constants
-│   └── secrets.h               # WiFi/MQTT credentials (gitignored)
+│   └── secrets.h               # WiFi credentials (gitignored)
 ├── src/
 │   ├── main.cpp                # Entry point — setup, loop, state machine
 │   ├── inputs.h / .cpp         # Read potentiometer and button
 │   ├── outputs.h / .cpp        # Control MOSFET (PWM), mode LED, light state
 │   ├── radar.h / .cpp          # LD2410C radar communication and config
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
-│   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/
     ├── arduino-basics.md       # Arduino intro for web devs
@@ -157,7 +132,6 @@ On boot:
 ```
 WiFi: connecting.... OK
 WiFi: IP 192.168.1.203
-MQTT: connected
 Web: server started on port 80
 Radar: config OK
 LED-on-presence started

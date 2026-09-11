@@ -7,14 +7,13 @@ led-multisensor/
 ├── platformio.ini              # Build config + libraries
 ├── include/
 │   ├── config.h                # Pin definitions and constants
-│   └── secrets.h               # WiFi/MQTT credentials (gitignored)
+│   └── secrets.h               # WiFi credentials (gitignored)
 ├── src/
 │   ├── main.cpp                # Entry point — setup, loop, state machine
 │   ├── inputs.h / .cpp         # Read potentiometer and button
 │   ├── outputs.h / .cpp        # Control MOSFET (PWM), mode LED, light state
 │   ├── radar.h / .cpp          # LD2410C radar communication and config
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
-│   ├── mqtt_handler.h / .cpp   # MQTT + Home Assistant auto-discovery
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/                       # This documentation
 ```
@@ -37,8 +36,6 @@ This tells PlatformIO:
 - Use the Arduino framework (provides `digitalWrite`, `analogRead`, `analogWrite`, etc.)
 - Serial monitor speed: 115200 baud (bits per second)
 - Install the ld2410 library for radar communication
-
-Equivalent in web terms: this is your `package.json` — it defines the build environment.
 
 ---
 
@@ -387,30 +384,6 @@ void wifiLoop() {
 ```
 
 Non-blocking WiFi with 10-second timeout on boot. If WiFi fails, the device continues working locally (radar, light, button, pot all work offline). Reconnection attempts every 5 seconds in the background.
-
----
-
-## `src/mqtt_handler.cpp` — Home Assistant Integration
-
-### Auto-Discovery
-
-When MQTT connects, the device publishes JSON config messages to `homeassistant/` topics. Home Assistant sees these and automatically creates entities (light, sensors, binary sensors). No manual YAML config needed on the HA side.
-
-### State Publishing
-
-Every 2 seconds, the device publishes:
-- Presence state (ON/OFF)
-- Radar distance
-- Light state (ON/OFF + brightness)
-- Potentiometer value
-
-### Command Subscription
-
-Subscribes to `led-on-presence/config/mode/set` — when HA sends "PRESENCE" or "MANUAL", the device switches modes.
-
-### Graceful Degradation
-
-If MQTT broker is unreachable, the device continues without Home Assistant integration. All local functionality (radar, light, button, pot, web UI) works independently.
 
 ---
 

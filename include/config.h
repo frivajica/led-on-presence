@@ -12,17 +12,18 @@
 // --- LD2410C Radar Sensor (HardwareSerial2) ---
 #define PIN_RADAR_RX       16   // LD2410C TX → ESP32 UART2 RX (direct, both 3.3V)
 #define PIN_RADAR_TX       17   // LD2410C RX ← ESP32 UART2 TX (direct, both 3.3V)
-#define RADAR_BAUD_RATE    256000  // LD2410C factory default
-#define RADAR_MAX_GATE     8    // Detect across full range (~6m)
-#define RADAR_MOTION_SENSITIVITY      15  // Movement detection threshold (0-100, lower = more sensitive)
-#define RADAR_STATIONARY_SENSITIVITY   15  // Breathing/still presence threshold (lower = more sensitive)
-#define RADAR_IDLE_TIME    15   // Seconds target must be absent before "no one" reported
+#define RADAR_BAUD_RATE    115200  // LD2410C configured via Bluetooth app
 
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
+#define PRESENCE_DEBOUNCE_MS  100  // Presence debounce to filter EMI glitches (ms)
+#define PRESENCE_COUNTDOWN_MS 15000 // Countdown before light turns off (ms)
 
 // --- PWM ---
 #define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-255). Scales with target.
+#define MAX_BRIGHTNESS      107    // Cap to prevent MOSFET flickering at higher brightness
+#define PWM_FREQUENCY       25000  // 25 kHz PWM to avoid visible flicker
+#define PWM_RESOLUTION      8      // 8-bit resolution (0-255)
 
 // --- Modes ---
 enum Mode {
@@ -31,5 +32,9 @@ enum Mode {
 };
 
 Mode getMode();
+
+bool getEffectivePresence();
+bool getCountdownActive();
+unsigned long getCountdownRemaining();
 
 #endif

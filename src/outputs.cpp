@@ -8,17 +8,18 @@ void setupOutputs() {
   pinMode(PIN_MOSFET, OUTPUT);
   pinMode(PIN_MODE_LED, OUTPUT);
 
-  // 25 kHz PWM eliminates visible flicker on COB LEDs (default ~1 kHz is
-  // perceptible, especially at low brightness). The IRLZ44N switches fast
-  // enough that losses are negligible at this frequency.
-  analogWriteFrequency(PIN_MOSFET, 25000);
+  ledcAttach(PIN_MOSFET, PWM_FREQUENCY, PWM_RESOLUTION);
+  ledcWrite(PIN_MOSFET, 0);
 
-  analogWrite(PIN_MOSFET, 0);
   digitalWrite(PIN_MODE_LED, LOW);
 }
 
 void setBrightness(uint8_t value) {
-  analogWrite(PIN_MOSFET, value);
+  if (value == 0) {
+    ledcWrite(PIN_MOSFET, 0);
+  } else {
+    ledcWrite(PIN_MOSFET, value);
+  }
   lastBrightness = value;
 }
 
