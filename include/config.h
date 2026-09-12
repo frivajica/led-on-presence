@@ -23,8 +23,10 @@
 #define BRIGHTNESS_HYSTERESIS 3    // Min change to update PWM — filters ADC noise
 #define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-255). Scales with target.
 #define MAX_BRIGHTNESS      255    // Full range — flicker fixed by PWM + write guard
-#define PWM_FREQUENCY       40000  // 40 kHz to avoid WiFi-induced jitter
+#define PWM_FREQUENCY       1000   // 1 kHz — MOSFET fully switches, immune to WiFi clock jitter
 #define PWM_RESOLUTION      8      // 8-bit resolution (0-255)
+#define LEDC_CHANNEL_MOSFET 0     // Dedicated LEDC channel for MOSFET PWM
+#define LEDC_TIMER          0     // Dedicated LEDC timer
 
 // --- Modes ---
 enum Mode {

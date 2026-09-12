@@ -8,19 +8,16 @@ void setupOutputs() {
   pinMode(PIN_MOSFET, OUTPUT);
   pinMode(PIN_MODE_LED, OUTPUT);
 
-  ledcAttach(PIN_MOSFET, PWM_FREQUENCY, PWM_RESOLUTION);
-  ledcWrite(PIN_MOSFET, 0);
+  ledcSetup(LEDC_CHANNEL_MOSFET, PWM_FREQUENCY, PWM_RESOLUTION);
+  ledcAttachPin(PIN_MOSFET, LEDC_CHANNEL_MOSFET);
+  ledcWrite(LEDC_CHANNEL_MOSFET, 0);
 
   digitalWrite(PIN_MODE_LED, LOW);
 }
 
 void setBrightness(uint8_t value) {
   if (value == lastBrightness) return;
-  if (value == 0) {
-    ledcWrite(PIN_MOSFET, 0);
-  } else {
-    ledcWrite(PIN_MOSFET, value);
-  }
+  ledcWrite(LEDC_CHANNEL_MOSFET, value);
   lastBrightness = value;
 }
 
