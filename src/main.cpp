@@ -5,6 +5,7 @@
 #include "wifi_manager.h"
 #include "web_server.h"
 #include <ArduinoOTA.h>
+#include <WiFi.h>
 
 enum PresenceState {
   PRESENCE_IDLE,
@@ -32,6 +33,8 @@ static bool countdownCompleted = false;
 static bool effectivePresence = true;
 static bool pendingPresenceDetected = false;
 static unsigned long pendingDetectSince = 0;
+static bool lastRadarConnected = false;
+static unsigned long radarOfflineSince = 0;
 
 Mode getMode() {
   return currentMode;
@@ -81,22 +84,23 @@ static void updatePresenceState(int potValue, bool presence) {
   }
 }
 
-static void printStatus(int potValue, bool radarPresence, bool effectivePresence, int target) {
+static void printStatus(int potValue, bool radarPresence, bool radarConnected, bool effectivePresence, int target) {
   static unsigned long lastPrint = 0;
   static unsigned long loopCounter = 0;
   static unsigned long lastLoopCount = 0;
   loopCounter++;
   if (millis() - lastLoopCount >= 1000) {
-    Serial.print(F("Loop: "));
-    Serial.print(loopCounter);
-    Serial.println(F("/s"));
+  Serial.print(F("Loop: "));
+  Serial.print(loopCounter);
+  Serial.print(F("/s WiFi: "));
+  Serial.println(WiFi.status() == WL_CONNECTED ? F("OK") : F("DISC"));
     loopCounter = 0;
     lastLoopCount = millis();
   }
   if (millis() - lastPrint <= 500) return;
   lastPrint = millis();
 
-  Serial.print(F("Pot: "));
+  Serial.print(F(" Pot: "));
   Serial.print(potValue);
   Serial.print(F(" Bright: "));
   Serial.print(currentBrightness);
@@ -104,6 +108,8 @@ static void printStatus(int potValue, bool radarPresence, bool effectivePresence
   Serial.print(targetBrightness);
   Serial.print(F(" Radar: "));
   Serial.print(radarPresence ? F("Y") : F("N"));
+  Serial.print(F(" RCon: "));
+  Serial.print(radarConnected ? F("Y") : F("N"));
   Serial.print(F(" Eff: "));
   Serial.print(effectivePresence ? F("Y") : F("N"));
   Serial.print(F(" Countdown: "));
@@ -127,6 +133,13 @@ static void printStatus(int potValue, bool radarPresence, bool effectivePresence
   Serial.print(isLightOn() ? F("ON") : F("OFF"));
   Serial.print(F(" Tgt: "));
   Serial.print(target);
+  Serial.print(F(" Dist: "));
+  if (radarPresence) {
+    Serial.print(radarDetectedDistance());
+    Serial.print(F("cm"));
+  } else {
+    Serial.print(F("-"));
+  }
   Serial.print(F(" Fade: "));
   Serial.println(fading ? F("Y") : F("N"));
 }
@@ -159,6 +172,19 @@ void setup() {
 void loop() {
   int potValue = readPotentiometer();
   bool radarPresence = radarPresenceDetected();
+  bool radarConnected = radarIsConnected();
+
+  if (radarConnected != lastRadarConnected) {
+    if (radarConnected) {
+      Serial.print(millis());
+      Serial.println(F(" RADAR ONLINE"));
+    } else {
+      radarOfflineSince = millis();
+      Serial.print(millis());
+      Serial.println(F(" RADAR OFFLINE"));
+    }
+    lastRadarConnected = radarConnected;
+  }
 
   if (abs(potValue - stablePotValue) > 2) {
     stablePotValue = potValue;
@@ -240,5 +266,5 @@ void loop() {
   ArduinoOTA.handle();
   wifiLoop();
 
-  printStatus(stablePotValue, radarPresence, effectivePresence, target);
+  printStatus(stablePotValue, radarPresence, radarConnected, effectivePresence, target);
 }
