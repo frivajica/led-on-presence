@@ -15,6 +15,7 @@ void setupOutputs() {
 }
 
 void setBrightness(uint8_t value) {
+  if (value == lastBrightness) return;
   if (value == 0) {
     ledcWrite(PIN_MOSFET, 0);
   } else {

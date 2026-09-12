@@ -216,7 +216,7 @@ void loop() {
     if (directionChanged) {
       fadeStart(target);
     }
-  } else if ((int)target != (int)targetBrightness) {
+  } else if (abs((int)target - (int)targetBrightness) >= BRIGHTNESS_HYSTERESIS) {
     if (fading) {
       targetBrightness = target;
     } else {
