@@ -30,6 +30,8 @@ static bool pendingPresenceLost = false;
 static bool countdownActive = false;
 static bool countdownCompleted = false;
 static bool effectivePresence = true;
+static bool pendingPresenceDetected = false;
+static unsigned long pendingDetectSince = 0;
 
 Mode getMode() {
   return currentMode;
@@ -168,8 +170,18 @@ void loop() {
     countdownActive = false;
     countdownStart = 0;
     countdownCompleted = false;
-    effectivePresence = true;
+
+    if (!effectivePresence) {
+      if (!pendingPresenceDetected) {
+        pendingPresenceDetected = true;
+        pendingDetectSince = millis();
+      } else if (millis() - pendingDetectSince >= PRESENCE_DEBOUNCE_MS) {
+        effectivePresence = true;
+      }
+    }
   } else {
+    pendingPresenceDetected = false;
+
     if (!pendingPresenceLost) {
       pendingPresenceLost = true;
       pendingSince = millis();

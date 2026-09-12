@@ -16,7 +16,7 @@
 
 // --- Thresholds ---
 #define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
-#define PRESENCE_DEBOUNCE_MS  100  // Presence debounce to filter EMI glitches (ms)
+#define PRESENCE_DEBOUNCE_MS  100  // Bidirectional: filter EMI glitches on loss and false spikes on detect (ms)
 #define PRESENCE_COUNTDOWN_MS 15000 // Countdown before light turns off (ms)
 
 // --- PWM ---
