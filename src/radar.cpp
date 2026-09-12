@@ -32,7 +32,9 @@ void setupRadar() {
 
 bool radarPresenceDetected() {
   if (!sensorReady || !radar.isConnected()) return false;
-  return radar.presenceDetected();
+  if (!radar.presenceDetected()) return false;
+  // EMI noise can report presence with 0 distance — filter it out
+  return radar.detectionDistance() > 0;
 }
 
 bool radarMotionDetected() {
