@@ -18,16 +18,15 @@
 | 2 | 24V COB LED Strip | 1 |
 | 3 | LD2410C mmWave Radar Sensor | 1 |
 | 4 | IRLZ44N MOSFET (TO-220) | 1 |
-| 5 | LM2596 Buck Converter Module | 1 |
-| 6 | Potentiometer (10kΩ typical) | 1 |
-| 7 | Momentary push button | 1 |
-| 8 | 24V DC Power Supply | 1 |
-| 9 | Protoboard (40x60mm) | 1 |
-| 10 | Jumper wires (male-to-male, male-to-female) | ~10 |
-| 11 | USB cable (Type-C or Micro-USB depending on board) | 1 |
-| 12 | Multimeter (recommended) | 1 |
-
-**Removed from Arduino Uno build:** 3× 1kΩ resistors (voltage divider no longer needed — ESP32 is 3.3V native, same as LD2410C).
+| 5 | 220Ω resistor | 1 |
+| 6 | LM2596 Buck Converter Module | 1 |
+| 7 | Potentiometer (10kΩ typical) | 1 |
+| 8 | Momentary push button | 1 |
+| 9 | 24V DC Power Supply | 1 |
+| 10 | Protoboard (40x60mm) | 1 |
+| 11 | Jumper wires (male-to-male, male-to-female) | ~10 |
+| 12 | USB cable (Type-C or Micro-USB depending on board) | 1 |
+| 13 | Multimeter (recommended) | 1 |
 
 ---
 
@@ -63,6 +62,8 @@ The LM2596 converts the 24V supply to 5V for the ESP32.
 
 **Warning:** Once the output is set to 5V, do NOT connect both USB and LM2596 output at the same time. Use one or the other.
 
+**EMI tip:** The buck converter radiates switching noise that corrupts the radar's UART lines. Keep it physically separated from the ESP32 and UART wires. Moving it to the opposite side of the enclosure (or outside entirely) can eliminate ~90% of interference.
+
 ---
 
 ## Step 2: IRLZ44N MOSFET
@@ -85,9 +86,17 @@ The MOSFET switches the 24V circuit using a PWM signal from the ESP32.
 
 | MOSFET Pin | Name | Connect To |
 |------------|------|-----------|
-| 1 | Gate (G) | ESP32 GPIO 25 |
+| 1 | Gate (G) | **220Ω resistor → ESP32 GPIO 25** (series, not to ground!) |
 | 2 | Drain (D) | LED strip − (black wire) |
 | 3 | Source (S) | Common GND |
+
+**Critical:** The 220Ω resistor must be **in series** between GPIO 25 and the MOSFET gate. A resistor from gate to ground is wrong — it creates a voltage divider that halves the gate voltage.
+
+```
+GPIO 25 ──[220Ω]── Gate
+```
+
+**Why the series resistor?** At 2 MHz SigmaDelta PWM, the MOSFET's gate capacitance (~1200 pF) combined with the 220Ω resistor naturally low-pass filters the high-frequency signal into a smooth DC voltage at the gate. This prevents the fast stutter (flicker) caused by the MOSFET operating in its linear region.
 
 **Important:** The Source pin connects to GND — the same ground as the ESP32 and the 24V supply.
 
@@ -122,7 +131,7 @@ The potentiometer has 3 pins. Hold it with the knob facing you and the pins faci
 
 ## Step 4: LD2410C Radar Sensor → ESP32
 
-The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationary humans. It communicates via UART (serial) at 256000 baud (factory default — the firmware uses it as-is).
+The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationary humans. It communicates via UART (serial) at **115200 baud** (configured via the HLKRadarTool Bluetooth app).
 
 **Pin identification:** The LD2410C has 5 pins on one end of the PCB:
 
@@ -147,6 +156,8 @@ The LD2410C is a 24GHz mmWave radar sensor that detects both moving AND stationa
 | GND | ESP32 GND | Common ground |
 
 **No voltage divider needed!** Both the ESP32 and LD2410C operate at 3.3V. The TX/RX lines connect directly — this is a major simplification over the Arduino Uno build.
+
+**EMI tip:** The buck converter's switching noise couples into the UART lines, causing the radar to briefly go offline (every ~100ms). This is cosmetic — the software filters out the resulting ghost presence reports. To reduce offline events, route the UART wires away from 24V and 5V power wires.
 
 **Mounting:**
 - Antenna side (copper trace side) faces the detection area
@@ -238,7 +249,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │  ESP-WROOM-32    │
                     │  DevKit V1       │
                     │                  │
-  USB ─────────────►│ USB              │  (disconnect when using LM2596)
+   USB ─────────────►│ USB              │  (disconnect when using LM2596)
                     │                  │
                     │ VIN ─────────────┼── LM2596 OUT+
                     │                  │
@@ -255,7 +266,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │                  │
                     │ GPIO27 ──────────┼──── Button Leg A
                     │                  │
-                     │ GPIO23 ──────────┼──── MOSFET Gate
+                    │ GPIO25 ───[220Ω]─┼──── MOSFET Gate
                     │                  │
                     │ GPIO2 ───────────┼──── (built-in blue LED, mode indicator)
                     └──────────────────┘
@@ -273,7 +284,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
                     │  IRLZ44N         │
                     │  (TO-220)        │
                     │                  │
-                      │  Gate ───────────┼──── ESP32 GPIO 25
+                      │  Gate ───────────┼──[220Ω]── ESP32 GPIO25
                     │  Drain ──────────┼──── LED Strip −
                     │  Source ─────────┼──── Common GND
                     └──────────────────┘
@@ -311,7 +322,7 @@ Without a common ground, the PWM signal from the ESP32 has no reference point an
 
 1. ✅ LM2596 output adjusted to 5.0V (measured with multimeter)
 2. ✅ All grounds connected (24V−, ESP32 GND, MOSFET Source)
-3. ✅ MOSFET Gate → ESP32 GPIO 25
+3. ✅ MOSFET Gate → 220Ω series resistor → ESP32 GPIO 25 (NOT to ground!)
 4. ✅ MOSFET Drain → LED strip −
 5. ✅ MOSFET Source → GND
 6. ✅ LED strip + → 24V+
@@ -333,8 +344,8 @@ You can test the logic before connecting the 24V supply:
 3. Connect MOSFET Gate to GPIO 25 (leave Drain and Source disconnected)
 4. Open serial monitor (`pio device monitor` — 115200 baud)
 5. You should see `LED-on-presence started` and `Mode: PRESENCE`
-6. The radar should initialize and show `Radar: config OK` (or `Radar: configured` on first boot)
-7. Walk in front of sensor → serial should show `Pres: Y` with distance
+6. The radar should initialize and show firmware version
+7. Walk in front of sensor → serial should show `Radar: Y` with distance
 8. Turn the potentiometer → serial should show brightness value changing
 9. Press the button → mode should toggle to MANUAL
 
@@ -344,10 +355,10 @@ The `Bright:` value in serial output shows the PWM value (0–255). When it chan
 
 ## MOSFET Without Heatsink
 
-For LED strips drawing under 2A, the IRLZ44N's Rds(on) of 0.022Ω generates minimal heat:
+For LED strips drawing under 2A, the IRLZ44N's Rds(on) of ~0.028Ω generates minimal heat:
 
 ```
-Power dissipated = I² × R = (2A)² × 0.022Ω = 0.088W
+Power dissipated = I² × R = (2A)² × 0.028Ω = 0.112W
 ```
 
 This is negligible — no heatsink needed for this project. If you later drive higher loads (>5A), add a heatsink to the metal tab.

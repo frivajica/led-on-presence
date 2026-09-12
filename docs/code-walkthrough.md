@@ -3,16 +3,16 @@
 ## Project Structure
 
 ```
-led-multisensor/
+led-on-presence/
 ├── platformio.ini              # Build config + libraries
 ├── include/
 │   ├── config.h                # Pin definitions and constants
 │   └── secrets.h               # WiFi credentials (gitignored)
 ├── src/
 │   ├── main.cpp                # Entry point — setup, loop, state machine
-│   ├── inputs.h / .cpp         # Read potentiometer and button
-│   ├── outputs.h / .cpp        # Control MOSFET (PWM), mode LED, light state
-│   ├── radar.h / .cpp          # LD2410C radar communication and config
+│   ├── inputs.h / .cpp         # Read potentiometer (EMA-filtered) and button
+│   ├── outputs.h / .cpp        # Control MOSFET (SigmaDelta PWM), mode LED
+│   ├── radar.h / .cpp          # LD2410C radar (autoReadTask, EMI filter)
 │   ├── wifi_manager.h / .cpp   # WiFi connect + auto-reconnect
 │   └── web_server.h / .cpp     # Minimal web UI for debugging
 └── docs/                       # This documentation
@@ -28,14 +28,21 @@ platform = espressif32
 board = esp32dev
 framework = arduino
 monitor_speed = 115200
-lib_deps = ncmreynolds/ld2410
+upload_protocol = espota
+upload_port = 192.168.1.203
+lib_deps =
+    ncmreynolds/ld2410
+    bblanchon/ArduinoJson
+    esp32async/ESPAsyncWebServer
+    esp32async/AsyncTCP
 ```
 
 This tells PlatformIO:
 - Target the ESP32 chip (ESP-WROOM-32 DevKit)
-- Use the Arduino framework (provides `digitalWrite`, `analogRead`, `analogWrite`, etc.)
-- Serial monitor speed: 115200 baud (bits per second)
-- Install the ld2410 library for radar communication
+- Use the Arduino framework
+- Serial monitor speed: 115200 baud
+- Upload via OTA (WiFi) to the configured IP
+- Install required libraries
 
 ---
 
@@ -49,26 +56,35 @@ This tells PlatformIO:
 
 #define PIN_RADAR_RX       16
 #define PIN_RADAR_TX       17
-#define RADAR_BAUD_RATE    256000  // LD2410C factory default
-#define RADAR_MAX_GATE     8       // detect across full range (~6m)
-#define RADAR_MOTION_SENSITIVITY     40  // movement detection (0-100, lower = more sensitive)
-#define RADAR_STATIONARY_SENSITIVITY 10  // breathing/still presence (lower = more sensitive)
-#define RADAR_IDLE_TIME    10      // seconds absent before "no one" reported
+#define RADAR_BAUD_RATE    115200  // Configured via Bluetooth app
 ```
 
 `#define` is C's way of creating named constants. At compile time, every `PIN_MOSFET` is replaced with `25`. This is like `const PIN_MOSFET = 25` in JavaScript, but happens at compile time (zero runtime cost).
 
-**Why GPIO 25 for the MOSFET?** It's PWM-capable. On the ESP32, all digital pins can do PWM via LEDC channels, but GPIO 25 is a safe choice — no boot conflicts, no special functions.
+**Why GPIO 25 for the MOSFET?** It's PWM-capable with no boot conflicts or special functions.
 
 **Why GPIO 16/17 for radar?** These are the default UART2 RX/TX pins on ESP32. Using hardware UART means no SoftwareSerial timing issues.
 
-**Split sensitivity:** The LD2410C has separate thresholds for motion (Doppler shift from movement) and stationary presence (micro-movements like breathing). Motion produces strong radar returns — sensitivity 40 works well. Stationary presence is much weaker — sensitivity 10 is needed to detect it reliably.
-
 ```cpp
-#define FADE_MAX_MS  500UL
+#define DEBOUNCE_MS        50   // Button debounce delay in milliseconds
+#define PRESENCE_DEBOUNCE_MS  100  // Bidirectional: filter EMI on detect and loss (ms)
+#define PRESENCE_COUNTDOWN_MS 15000 // Countdown before light turns off (ms)
 ```
 
-Fade duration in milliseconds at full brightness (0→255). Duration scales with target brightness: `FADE_MAX_MS * targetBrightness / 255`. A fade to 50% brightness takes ~250ms, a fade to full takes 500ms. Minimum floor of 50ms prevents invisible short fades.
+**Presence debounce (100ms):** Applied in both directions. When the radar first reports presence, a 100ms timer starts — only if presence persists does it activate. When presence is lost, the same 100ms debounce fires before the 15-second countdown begins.
+
+**Software countdown (15s):** After the radar reports absence + 100ms debounce, a 15-second countdown begins. The light stays on during this entire period. This prevents brief radar dropouts from turning off the light.
+
+```cpp
+#define BRIGHTNESS_HYSTERESIS 3    // Min change to update PWM — filters ADC noise
+#define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-255). Scales with target.
+#define MAX_BRIGHTNESS      255    // 8-bit SigmaDelta
+#define PWM_FREQUENCY       2000000 // 2 MHz SigmaDelta carrier frequency
+```
+
+**PWM hysteresis (±3):** The brightness target only updates when the change from the current target exceeds 3 units (out of 255). This prevents ADC noise from causing constant micro-updates to the PWM output.
+
+**SigmaDelta at 2 MHz:** Unlike LEDC's square-wave PWM, SigmaDelta uses noise shaping at 2 MHz. The MOSFET's gate capacitance + 220Ω series resistor naturally low-pass this into a smooth analog DC voltage, preventing the MOSFET from oscillating in its linear region.
 
 ```cpp
 enum Mode {
@@ -95,21 +111,39 @@ void setupInputs() {
 
 The ESP32 defaults to 12-bit ADC (0–4095). We set it to 10-bit (0–1023) to match the Arduino Uno's range. This means the `map()` call in `main.cpp` works without changes.
 
-### Potentiometer
+### Potentiometer with Dual Filtering
 
 ```cpp
+static float emaValue = -1;
+static constexpr float EMA_ALPHA = 0.15;
+
 int readPotentiometer() {
-  return analogRead(PIN_POTENTIOMETER);
+  long sum = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    sum += analogRead(PIN_POTENTIOMETER);
+  }
+  int sample = sum / 8;
+
+  if (emaValue < 0) {
+    emaValue = sample;
+  } else {
+    emaValue = EMA_ALPHA * sample + (1.0 - EMA_ALPHA) * emaValue;
+  }
+
+  lastPotValue = (int)emaValue;
+  return lastPotValue;
 }
 ```
 
-`analogRead()` is an Arduino built-in. It:
-1. Activates the ADC (Analog-to-Digital Converter) on the pin
-2. Samples the voltage (0–3.3V)
-3. Converts it to a 10-bit number (0–1023)
-4. Returns the result
+**Two layers of noise reduction:**
 
-This is like `fetch()` for voltage — it converts a physical phenomenon (voltage) into a number your code can use.
+1. **8-sample averaging:** Each call takes 8 rapid ADC reads and averages them. Each read takes ~10 µs, so 8 reads take < 100 µs — no perceptible delay. This reduces the ESP32's inherent ADC thermal noise (~50–100 LSB jitter).
+
+2. **Exponential Moving Average (EMA):** The averaged sample is fed into an EMA with α=0.15. This gives a smoothing effect equivalent to ~13 samples over time:
+   ```
+   emaValue = 0.15 * currentSample + 0.85 * previousEmaValue
+   ```
+   This rejects slow power rail noise from the 24V→5V buck converter that would otherwise cause the brightness to fluctuate.
 
 ### Button with Debounce
 
@@ -154,22 +188,29 @@ bool readButton() {
 
 ## `src/outputs.cpp` — Controlling Outputs
 
-### PWM Brightness Control
+### SigmaDelta PWM Brightness Control
 
 ```cpp
+void setupOutputs() {
+  pinMode(PIN_MOSFET, OUTPUT);
+  pinMode(PIN_MODE_LED, OUTPUT);
+
+  sigmaDeltaAttach(PIN_MOSFET, PWM_FREQUENCY);
+  sigmaDeltaWrite(PIN_MOSFET, 0);
+
+  digitalWrite(PIN_MODE_LED, LOW);
+}
+
 void setBrightness(uint8_t value) {
-  analogWrite(PIN_MOSFET, value);
+  if (value == lastBrightness) return;
+  sigmaDeltaWrite(PIN_MOSFET, value);
+  lastBrightness = value;
 }
 ```
 
-`analogWrite()` sends a PWM signal to the pin. On the ESP32, this internally uses the LEDC (LED Control) peripheral. The value (0–255) controls the duty cycle:
-- `0` = 0% on, 100% off → LED off
-- `127` = 50% on, 50% off → LED at half brightness
-- `255` = 100% on, 0% off → LED at full brightness
+**SigmaDelta vs LEDC:** The ESP32's SigmaDelta peripheral uses noise shaping at 2 MHz instead of fixed-width square waves. At this frequency, the MOSFET's own gate capacitance (~1200 pF) combined with the 220Ω series resistor acts as an RC low-pass filter, converting the high-frequency noise-shaped signal into a smooth DC voltage at the gate. This prevents the fast micro-stutter caused by the MOSFET operating at the edge of its linear region with only 3.3V drive.
 
-The MOSFET switches the 24V circuit on and off ~490 times per second (the default PWM frequency). Your eyes perceive this as average brightness.
-
-**Web analogy:** `analogWrite(127)` is like setting `opacity: 0.5` on an element — it's a continuous value, not just on/off.
+**Write guard:** `setBrightness()` returns early if the value hasn't changed. This prevents hammering `sigmaDeltaWrite()` every loop iteration (thousands of times/sec), which could cause subtle PWM jitter.
 
 ### Mode LED
 
@@ -185,27 +226,6 @@ The built-in LED on GPIO 2 is active-high: `HIGH` = LED ON.
 
 ## `src/radar.cpp` — LD2410C Radar Communication
 
-### Auto-Configuration
-
-```cpp
-static bool radarNeedsConfig() {
-  if (radar.max_moving_gate != RADAR_MAX_GATE ||
-      radar.max_stationary_gate != RADAR_MAX_GATE ||
-      radar.sensor_idle_time != RADAR_IDLE_TIME) {
-    return true;
-  }
-  for (uint8_t gate = 0; gate <= RADAR_MAX_GATE; gate++) {
-    if (radar.motion_sensitivity[gate] != RADAR_MOTION_SENSITIVITY ||
-        radar.stationary_sensitivity[gate] != RADAR_STATIONARY_SENSITIVITY) {
-      return true;
-    }
-  }
-  return false;
-}
-```
-
-The LD2410C stores its configuration in flash memory. On first boot (or if you change constants), we write the config once. On subsequent boots, `radarNeedsConfig()` compares the sensor's current settings against our constants — if they match, we skip configuration. This gives us fast boot times and no unnecessary flash wear.
-
 ### Setup
 
 ```cpp
@@ -215,42 +235,49 @@ void setupRadar() {
   delay(500);
   while (Serial2.available()) Serial2.read();
 
-  sensorReady = radar.begin(Serial2, false);
+  sensorReady = radar.begin(Serial2, true);
 
-  // Defensive: recover a sensor left stuck in config mode
-  Serial2.write(CMD_LEAVE_CONFIG, sizeof(CMD_LEAVE_CONFIG));
-  Serial2.flush();
-  delay(100);
-  while (Serial2.available()) Serial2.read();
-  ...
+  if (!sensorReady) {
+    Serial.println(F("Radar: no response to firmware query — check wiring/baud rate"));
+    radar.autoReadTask();
+    return;
+  }
+
+  Serial.print(F("Radar: firmware v"));
+  // ... print version info
+
+  radar.autoReadTask();
 }
 ```
 
 Key points:
-- **256000 baud** — the LD2410C's factory default. We never change it.
-- **`Serial2.setRxBufferSize(2048)`** — larger buffer for reliable reception at high baud rates.
-- **LEAVE_CFG command** — sent defensively at boot in case a previous power loss left the sensor stuck in config mode. Ignored when already in data mode.
-- **`radar.begin(Serial2, false)`** — the `false` means "don't try to configure baud rate" (we know it's already 256000). This call always returns `true`, so we use the `sensorReady` flag only as a guard.
+- **115200 baud** — configured via the HLKRadarTool Bluetooth app (not factory default of 256000)
+- **`Serial2.setRxBufferSize(2048)`** — larger buffer for reliable reception
+- **`radar.begin(Serial2, true)`** — the `true` means "wait for response and verify connection"
+- **`radar.autoReadTask()`** — starts a FreeRTOS background task that continuously reads UART frames. This runs independently of the main loop, so no blocking UART reads are needed.
 
-### Reading Presence
+### Reading Presence with EMI Filter
 
 ```cpp
 bool radarPresenceDetected() {
-  if (!sensorReady) return false;
-  radar.read();
-  return radar.presenceDetected();
+  if (!sensorReady || !radar.isConnected()) return false;
+  if (!radar.presenceDetected()) return false;
+  // EMI noise can report presence with 0 distance — filter it out
+  return radar.detectionDistance() > 0;
 }
 ```
 
-`radar.read()` pulls available bytes from Serial2, parses complete frames, and updates the sensor's internal state. `presenceDetected()` returns `true` if the sensor sees a moving OR stationary target.
+**The EMI filter:** The buck converter's switching noise corrupts UART frames into ghost presence reports. These corrupted frames always report `distance = 0cm` (physically impossible — the LD2410C's minimum detection range is ~75cm). The filter rejects these by requiring `detectionDistance() > 0`.
 
-**Connection freshness:** `radar.isConnected()` checks whether a valid data frame was received within the last 3 seconds. If the sensor stops sending data (unplugged, baud mismatch, or firmware crash), it returns `false` and the web UI shows "Radar: OFFLINE".
+**Zero delay on real targets:** A real person always reports a valid distance. The filter adds zero latency — it only blocks impossible reports.
 
-The LD2410C uses two detection channels:
-- **Moving targets** — detected via Doppler frequency shift
-- **Stationary targets** — detected via micro-movements (breathing, slight posture changes)
+**How `autoReadTask()` works:** It's an ESP32 FreeRTOS background task that:
+1. Drains available bytes from the UART into a circular buffer
+2. Parses complete data frames
+3. Updates the sensor's internal state (target type, distance, energy levels)
+4. Sleeps 10ms between iterations
 
-Both count as "presence" for our purposes.
+The main loop reads this state directly — no blocking `radar.read()` calls needed.
 
 ---
 
@@ -268,9 +295,18 @@ static bool lastPresence = false;
 static uint8_t fadeStartBrightness = 0;
 static unsigned long fadeStartTime = 0;
 static bool fading = false;
-```
 
-These persist across `loop()` calls (via `static`). They represent the complete state of the system:
+static int stablePotValue = 0;
+
+static unsigned long pendingSince = 0;
+static unsigned long countdownStart = 0;
+static bool pendingPresenceLost = false;
+static bool countdownActive = false;
+static bool countdownCompleted = false;
+static bool effectivePresence = true;
+static bool pendingPresenceDetected = false;
+static unsigned long pendingDetectSince = 0;
+```
 
 | Variable | Type | Purpose |
 |----------|------|---------|
@@ -278,91 +314,166 @@ These persist across `loop()` calls (via `static`). They represent the complete 
 | `presenceState` | PresenceState | IDLE or ACTIVE |
 | `currentBrightness` | 0–255 | What the LED is currently at |
 | `targetBrightness` | 0–255 | What we're fading toward |
-| `lastPresence` | bool | Previous presence state (for serial output and web UI updates) |
-| `fading` | bool | Whether a fade is in progress |
-
-### Setup
-
-```cpp
-void setup() {
-  Serial.begin(115200);
-  setupInputs();
-  setupOutputs();
-  setupRadar();
-
-  Serial.println(F("LED-on-presence started"));
-  Serial.println(F("Mode: PRESENCE (default)"));
-}
-```
-
-**`setup()` runs once** when the ESP32 powers on. Equivalent to a constructor or `useEffect([], ...)`.
-
-**`F()` macro:** Wraps string literals to store them in flash memory instead of RAM. On the ESP32 this is less critical (520KB RAM vs Arduino's 2KB), but it's still good practice.
+| `lastPresence` | bool | Previous presence state (for fade trigger) |
+| `effectivePresence` | bool | The actual presence state after debounce + countdown |
+| `countdownActive` | bool | 15-second countdown is running |
+| `countdownCompleted` | bool | Countdown finished (light ready to turn off) |
+| `pendingPresenceLost` | bool | Radar just went absent — debouncing |
+| `pendingPresenceDetected` | bool | Radar just appeared — debouncing |
 
 ### The Loop
 
 ```cpp
 void loop() {
-  if (readButton()) {
-    currentMode = (currentMode == MODE_PRESENCE) ? MODE_MANUAL : MODE_PRESENCE;
-    Serial.print(F("Mode: "));
-    Serial.println(currentMode == MODE_PRESENCE ? F("PRESENCE") : F("MANUAL"));
-  }
-
   int potValue = readPotentiometer();
-  bool presence = radarPresenceDetected();
+  bool radarPresence = radarPresenceDetected();
 
-  updatePresenceState(potValue, presence);
-
-  if (lightOn) {
-    fadeToward(map(potValue, 0, 1023, 255, 0));
-  } else {
-    fadeToward(0);
+  // Stable pot value filter
+  if (abs(potValue - stablePotValue) > 2) {
+    stablePotValue = potValue;
   }
+
+  // Presence debounce + countdown state machine
+  if (radarPresence) {
+    // Reset loss state, start detection debounce if needed
+    pendingPresenceLost = false;
+    countdownActive = false;
+    countdownStart = 0;
+    countdownCompleted = false;
+
+    if (!effectivePresence) {
+      if (!pendingPresenceDetected) {
+        pendingPresenceDetected = true;
+        pendingDetectSince = millis();
+      } else if (millis() - pendingDetectSince >= PRESENCE_DEBOUNCE_MS) {
+        effectivePresence = true;
+      }
+    }
+  } else {
+    // Reset detection state, start loss debounce
+    pendingPresenceDetected = false;
+
+    if (!pendingPresenceLost) {
+      pendingPresenceLost = true;
+      pendingSince = millis();
+      countdownCompleted = false;
+      effectivePresence = true;
+    } else if (millis() - pendingSince >= PRESENCE_DEBOUNCE_MS) {
+      if (!countdownActive && !countdownCompleted) {
+        countdownActive = true;
+        countdownStart = millis();
+      }
+      unsigned long elapsed = millis() - countdownStart;
+      if (elapsed >= PRESENCE_COUNTDOWN_MS) {
+        effectivePresence = false;
+        countdownActive = false;
+        countdownCompleted = true;
+      } else {
+        effectivePresence = true;  // Light stays on during countdown
+      }
+    } else {
+      effectivePresence = true;  // Within 100ms debounce window
+    }
+  }
+
+  updatePresenceState(stablePotValue, effectivePresence);
+
+  int target = isLightOn() ? map(stablePotValue, 0, 1023, 255, 0) : 0;
+  if (target > MAX_BRIGHTNESS) target = MAX_BRIGHTNESS;
+
+  // Fade logic — only start fade on direction change
+  if (effectivePresence != lastPresence) {
+    bool directionChanged = (effectivePresence && targetBrightness == 0) ||
+                            (!effectivePresence && targetBrightness > 0);
+    if (directionChanged) {
+      fadeStart(target);
+    }
+  } else if (abs((int)target - (int)targetBrightness) >= BRIGHTNESS_HYSTERESIS) {
+    if (fading) {
+      targetBrightness = target;
+    } else {
+      currentBrightness = target;
+      targetBrightness = target;
+    }
+  }
+
+  fadeUpdate();
+  lastPresence = effectivePresence;
 
   setBrightness(currentBrightness);
   setModeLed(currentMode == MODE_MANUAL);
 
-  printStatus(potValue, presence);
+  if (readButton()) {
+    currentMode = (currentMode == MODE_PRESENCE) ? MODE_MANUAL : MODE_PRESENCE;
+  }
+
+  ArduinoOTA.handle();
+  wifiLoop();
+
+  printStatus(stablePotValue, radarPresence, radarConnected, effectivePresence, target);
 }
 ```
 
 **Step-by-step:**
 
-1. **Button check:** If pressed, toggle mode. The debounce logic is inside `readButton()`.
+1. **Read sensors:** Get filtered potentiometer value and radar presence (after EMI filter).
 
-2. **Read sensors:** Get potentiometer position and radar presence state.
+2. **Stable pot filter:** Only update `stablePotValue` when the raw reading differs by > 2. Combined with the 8-sample averaging and EMA in `readPotentiometer()`, this creates triple noise filtering.
 
-3. **Presence state machine:** `updatePresenceState()` handles the two states:
-   - `PRESENCE_IDLE` → if presence detected, move to ACTIVE, turn light on
-   - `PRESENCE_ACTIVE` → if presence goes away, move back to IDLE, turn light off
-   - Manual mode → light on if pot > 5, ignore sensor
+3. **Presence debounce + countdown:**
+   - **Radar reports presence:** Start 100ms detection debounce. If presence persists → activate. Cancel any countdown.
+   - **Radar reports absence:** Start 100ms loss debounce. If absence persists → begin 15s countdown. Light stays on during countdown.
+   - **Countdown complete:** `effectivePresence = false`, light fades off.
 
-4. **Fade:** `fadeToward()` uses time-based fading with `FADE_MAX_MS`. It calculates the fraction of time elapsed since the fade started and interpolates brightness linearly from `fadeStartBrightness` to the target. Duration scales with target brightness: `FADE_MAX_MS * target / 255`.
+4. **Brightness mapping:** Convert pot value (0–1023) to PWM target (255–0, inverted for clockwise = dimmer). Cap at `MAX_BRIGHTNESS`.
 
-5. **Output:** Write PWM value to MOSFET, update mode LED.
+5. **Hysteresis check:** Only update target when the change exceeds `BRIGHTNESS_HYSTERESIS` (3 units). This prevents ADC noise from causing constant micro-updates.
 
-6. **Debug:** `printStatus()` prints sensor state every 500ms (not every loop, which would flood the serial monitor), including a loop counter.
+6. **Fade:** Time-based linear interpolation from `fadeStartBrightness` to target. Duration scales with brightness: `500ms * target / 255`. Minimum 50ms floor prevents invisible short fades.
 
-**`map()` function:** Scales a number from one range to another. `map(potValue, 0, 1023, 255, 0)` converts the potentiometer's 0–1023 range to PWM's 255–0 range (inverted for clockwise = dimmer).
+7. **Output:** Write PWM value (with write guard — only if changed), update mode LED.
 
-**`fadeToward()` helper:** Computes elapsed time since fade start, determines total fade duration based on target brightness, and linearly interpolates `currentBrightness`. `min()` and `max()` clamp the value so it doesn't overshoot. When the target is reached, `fading` is set to `false`.
+8. **Background:** Handle OTA updates, WiFi reconnection, and serial debug output.
+
+### Fade Logic
+
+```cpp
+static void fadeUpdate() {
+  if (!fading) return;
+  unsigned long duration = (unsigned long)FADE_MAX_MS * targetBrightness / 255;
+  if (duration < 50) duration = 50;
+  unsigned long elapsed = millis() - fadeStartTime;
+  if (elapsed >= duration) {
+    currentBrightness = targetBrightness;
+    fading = false;
+  } else {
+    float progress = (float)elapsed / duration;
+    currentBrightness = fadeStartBrightness +
+        (int)((int)targetBrightness - (int)fadeStartBrightness) * progress;
+  }
+}
+```
+
+Duration scales with target brightness: a fade to 50% takes ~250ms, to full takes 500ms. The 50ms minimum prevents fades that are too short to see.
 
 ---
 
 ## Debug Output
 
 ```cpp
-static unsigned long lastPrint = 0;
-if (millis() - lastPrint > 500) {
-  lastPrint = millis();
-  Serial.print(F("Pot: "));
-  Serial.print(potValue);
-  // ...
+static void printStatus(int potValue, bool radarPresence, bool radarConnected, bool effectivePresence, int target) {
+  // Prints every 500ms (not every loop)
+  // Includes loop counter, WiFi state
 }
 ```
 
-Prints debug info every 500ms (not every loop, which would flood the serial monitor). The `static` variable `lastPrint` tracks when we last printed.
+Sample output:
+```
+Loop: 2382/s WiFi: OK
+ Pot: 439 Bright: 146/146 Radar: Y RCon: Y Eff: Y Countdown: - State: ACTIVE Light: ON Tgt: 146 Dist: 150cm Fade: N
+```
+
+`RADAR OFFLINE` / `RADAR ONLINE` events are printed with timestamps when the UART connection state changes. These help diagnose EMI from the buck converter.
 
 ---
 
@@ -394,10 +505,9 @@ Serves a minimal HTML page at `http://<esp32-ip>` with:
 - Radar connection status (ONLINE / OFFLINE)
 - Motion state, Presence state, Distance
 - Light state, Brightness, Potentiometer value
-- Light toggle button
-- Auto-refreshes every second
+- Auto-refreshes every second via `fetch('/api/status')`
 
-Also exposes `GET /api/status` (JSON) and `POST /api/toggle` for programmatic access.
+Also exposes `GET /api/status` (JSON) for programmatic access.
 
 ---
 
@@ -412,10 +522,10 @@ Also exposes `GET /api/status` (JSON) and `POST /api/toggle` for programmatic ac
 | `Date.now()` | `millis()` |
 | `const` / `let` | `#define` / `static` variables |
 | `useEffect(fn, [])` | `setup()` |
-| `setInterval(fn, 10)` | `loop()` (non-blocking) |
-| CSS `opacity: 0.5` | `analogWrite(pin, 127)` |
-| `element.style.opacity` | `analogWrite(pin, value)` |
+| `setInterval(fn, 10)` | `loop()` (synchronous, non-blocking) |
+| CSS `opacity: 0.5` | `sigmaDeltaWrite(pin, 127)` |
 | TypeScript type | `enum` / `#define` |
 | `Math.min(a, b)` | `min(a, b)` |
 | `value * 255 / 1023` | `map(value, 0, 1023, 0, 255)` |
 | Node.js event loop | Arduino `loop()` (synchronous) |
+| FreeRTOS task | `autoReadTask()` (background UART reader) |
