@@ -1,7 +1,7 @@
 #include "outputs.h"
 #include "config.h"
 
-static uint8_t lastBrightness = 0;
+static uint16_t lastBrightness = 0;
 static bool lightIsOn = false;
 
 void setupOutputs() {
@@ -14,13 +14,13 @@ void setupOutputs() {
   digitalWrite(PIN_MODE_LED, LOW);
 }
 
-void setBrightness(uint8_t value) {
+void setBrightness(uint16_t value) {
   if (value == lastBrightness) return;
   ledcWrite(PIN_MOSFET, value);
   lastBrightness = value;
 }
 
-uint8_t getCurrentBrightness() {
+uint16_t getCurrentBrightness() {
   return lastBrightness;
 }
 

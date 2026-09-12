@@ -20,11 +20,11 @@
 #define PRESENCE_COUNTDOWN_MS 15000 // Countdown before light turns off (ms)
 
 // --- PWM ---
-#define BRIGHTNESS_HYSTERESIS 3    // Min change to update PWM — filters ADC noise
-#define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-255). Scales with target.
-#define MAX_BRIGHTNESS      255    // Full range — flicker fixed by PWM + write guard
+#define BRIGHTNESS_HYSTERESIS 48   // Min change to update PWM (12-bit: ~1.2%)
+#define FADE_MAX_MS         500UL  // Fade duration at full brightness (0-4095). Scales with target.
+#define MAX_BRIGHTNESS      4095   // 12-bit PWM — finer duty steps for smoother brightness
 #define PWM_FREQUENCY       1000   // 1 kHz — MOSFET fully switches, immune to WiFi clock jitter
-#define PWM_RESOLUTION      8      // 8-bit resolution (0-255)
+#define PWM_RESOLUTION      12     // 12-bit resolution (0-4095)
 
 // --- Modes ---
 enum Mode {

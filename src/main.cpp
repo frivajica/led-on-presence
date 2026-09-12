@@ -13,11 +13,11 @@ enum PresenceState {
 
 static Mode currentMode = MODE_PRESENCE;
 static PresenceState presenceState = PRESENCE_IDLE;
-static uint8_t currentBrightness = 0;
-static uint8_t targetBrightness = 0;
+static uint16_t currentBrightness = 0;
+static uint16_t targetBrightness = 0;
 static bool lastPresence = false;
 
-static uint8_t fadeStartBrightness = 0;
+static uint16_t fadeStartBrightness = 0;
 static unsigned long fadeStartTime = 0;
 static bool fading = false;
 
@@ -37,7 +37,7 @@ Mode getMode() {
   return currentMode;
 }
 
-static void fadeStart(uint8_t target) {
+static void fadeStart(uint16_t target) {
   if (target == currentBrightness) return;
   fadeStartBrightness = currentBrightness;
   targetBrightness = target;
@@ -47,7 +47,7 @@ static void fadeStart(uint8_t target) {
 
 static void fadeUpdate() {
   if (!fading) return;
-  unsigned long duration = (unsigned long)FADE_MAX_MS * targetBrightness / 255;
+  unsigned long duration = (unsigned long)FADE_MAX_MS * targetBrightness / 4095;
   if (duration < 50) duration = 50;
   unsigned long elapsed = millis() - fadeStartTime;
   if (elapsed >= duration) {
@@ -56,7 +56,7 @@ static void fadeUpdate() {
   } else {
     float progress = (float)elapsed / duration;
     currentBrightness = fadeStartBrightness +
-        (int)((int)targetBrightness - (int)fadeStartBrightness) * progress;
+        (uint16_t)((int)targetBrightness - (int)fadeStartBrightness) * progress;
   }
 }
 
@@ -207,7 +207,7 @@ void loop() {
 
   updatePresenceState(stablePotValue, effectivePresence);
 
-  int target = isLightOn() ? map(stablePotValue, 0, 1023, 255, 0) : 0;
+  int target = isLightOn() ? map(stablePotValue, 0, 1023, 4095, 0) : 0;
   if (target > MAX_BRIGHTNESS) target = MAX_BRIGHTNESS;
 
   if (effectivePresence != lastPresence) {
