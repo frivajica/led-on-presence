@@ -59,11 +59,24 @@ Edit `include/secrets.h` (gitignored):
 ```bash
 # Build
 ~/.platformio/penv/bin/pio run
+```
 
-# Upload via USB
-~/.platformio/penv/bin/pio run -t upload
+Choose one upload method in `platformio.ini`:
 
-# Upload via OTA (if already on network)
+**USB serial** (first flash or if WiFi is unavailable):
+```ini
+upload_protocol = esptool
+upload_port = /dev/cu.usbserial-0001
+```
+
+**WiFi OTA** (convenient after initial setup):
+```ini
+upload_protocol = espota
+upload_port = 192.168.1.203
+```
+
+Then upload:
+```bash
 ~/.platformio/penv/bin/pio run -t upload
 
 # Monitor serial output
