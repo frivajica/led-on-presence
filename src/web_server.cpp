@@ -4,6 +4,7 @@
 #include "inputs.h"
 #include "outputs.h"
 #include "radar.h"
+#include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 
 static AsyncWebServer server(80);
@@ -59,7 +60,7 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('pot').textContent = d.potValue;
         document.getElementById('disc').textContent = d.disconnectCount;
         document.getElementById('stab').textContent = d.sensorStabilizing ? 'YES' : 'NO';
-      });
+      }).catch(err => console.error('Dashboard update failed:', err));
     }
     update();
     setInterval(update, 1000);
@@ -91,7 +92,7 @@ void webServerSetup() {
     doc["disconnectCount"] = getDisconnectCount();
     doc["lastDisconnectTime"] = getLastDisconnectTime();
     doc["sensorStabilizing"] = isSensorStabilizing();
-    char buf[256];
+    char buf[512];
     serializeJson(doc, buf, sizeof(buf));
     req->send(200, "application/json", buf);
   });
