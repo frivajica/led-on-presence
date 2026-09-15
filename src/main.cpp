@@ -43,7 +43,7 @@ static unsigned long lastDisconnectTime = 0;
 // Sensor offline grace period: freeze state for this duration before failing safe
 static constexpr unsigned long SENSOR_OFFLINE_GRACE_MS = 2000;
 // Sensor reconnect stabilization: wait this long before trusting presence data
-static constexpr unsigned long SENSOR_STABILIZE_MS = 500;
+static constexpr unsigned long SENSOR_STABILIZE_MS = 200;
 
 Mode getMode() {
   return currentMode;
@@ -180,6 +180,9 @@ void setup() {
 
   ArduinoOTA.setHostname("led-on-presence");
   ArduinoOTA.begin();
+
+  lastRadarConnected = radarIsConnected();
+  disconnectCount = 0;
 
   Serial.println(F("LED-on-presence started"));
   Serial.println(F("Mode: PRESENCE (default)"));
