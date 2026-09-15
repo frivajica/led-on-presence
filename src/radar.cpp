@@ -7,7 +7,7 @@ static ld2410 radar;
 static bool sensorReady = false;
 
 void setupRadar() {
-  Serial2.setRxBufferSize(2048);
+  Serial2.setRxBufferSize(8192);
   Serial2.begin(RADAR_BAUD_RATE, SERIAL_8N1, PIN_RADAR_RX, PIN_RADAR_TX);
   delay(500);
   while (Serial2.available()) Serial2.read();
@@ -16,7 +16,7 @@ void setupRadar() {
 
   if (!sensorReady) {
     Serial.println(F("Radar: no response to firmware query — check wiring/baud rate"));
-    radar.autoReadTask();
+    radar.autoReadTask(4096, 3, 1);
     return;
   }
 
@@ -27,7 +27,7 @@ void setupRadar() {
   Serial.print('.');
   Serial.println(radar.firmware_bugfix_version, HEX);
 
-  radar.autoReadTask();
+  radar.autoReadTask(4096, 3, 1);
 }
 
 bool radarPresenceDetected() {
