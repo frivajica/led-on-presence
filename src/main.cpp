@@ -33,15 +33,16 @@ static bool countdownCompleted = false;
 static bool effectivePresence = false;
 static bool pendingPresenceDetected = false;
 static unsigned long pendingDetectSince = 0;
-static bool lastRadarConnected = false;
+static bool lastRadarStable = false;
+static unsigned long sensorOfflineStart = 0;
 static unsigned long radarOfflineSince = 0;
 static unsigned long radarOnlineSince = 0;
 static bool sensorStabilizing = false;
 static unsigned int disconnectCount = 0;
 static unsigned long lastDisconnectTime = 0;
 
-// Sensor offline grace period: freeze state for this duration before failing safe
-static constexpr unsigned long SENSOR_OFFLINE_GRACE_MS = 2000;
+// Sensor offline grace period: treat disconnects shorter than this as noise
+static constexpr unsigned long SENSOR_FLAP_FILTER_MS = 500;
 // Sensor reconnect stabilization: wait this long before trusting presence data
 static constexpr unsigned long SENSOR_STABILIZE_MS = 200;
 
@@ -181,7 +182,7 @@ void setup() {
   ArduinoOTA.setHostname("led-on-presence");
   ArduinoOTA.begin();
 
-  lastRadarConnected = radarIsConnected();
+  lastRadarStable = true;
   disconnectCount = 0;
 
   Serial.println(F("LED-on-presence started"));
@@ -193,31 +194,43 @@ void loop() {
   bool radarPresence = radarPresenceDetected();
   bool radarConnected = radarIsConnected();
 
-  // Track sensor connect/disconnect events
-  if (radarConnected != lastRadarConnected) {
-    if (radarConnected) {
-      radarOnlineSince = millis();
-      sensorStabilizing = true;
-      disconnectCount++;
-      Serial.print(millis());
-      Serial.print(F(" RADAR ONLINE ("));
-      Serial.print(F("disconnects: "));
-      Serial.print(disconnectCount);
-      if (lastDisconnectTime > 0) {
-        unsigned long offlineDuration = radarOnlineSince - lastDisconnectTime;
-        Serial.print(F(", was offline for "));
-        Serial.print(offlineDuration);
-        Serial.print(F("ms"));
-      }
-      Serial.println(F(")"));
-    } else {
-      radarOfflineSince = millis();
-      lastDisconnectTime = millis();
-      sensorStabilizing = false;
-      Serial.print(millis());
-      Serial.println(F(" RADAR OFFLINE"));
+  // Track sensor connect/disconnect events with 500ms flap filter
+  if (radarConnected) {
+    sensorOfflineStart = 0;
+  } else if (sensorOfflineStart == 0) {
+    sensorOfflineStart = millis();
+  } else if (sensorOfflineStart == 0) {
+    // Won't reach here, but compiler is happy
+  }
+
+  bool sustainedOffline = sensorOfflineStart > 0 && (millis() - sensorOfflineStart >= SENSOR_FLAP_FILTER_MS);
+  bool sustainedOnline = !sustainedOffline;
+
+  if (sustainedOnline && !lastRadarStable) {
+    // Just came back online after sustained offline
+    radarOnlineSince = millis();
+    sensorStabilizing = true;
+    disconnectCount++;
+    Serial.print(millis());
+    Serial.print(F(" RADAR ONLINE ("));
+    Serial.print(F("disconnects: "));
+    Serial.print(disconnectCount);
+    if (lastDisconnectTime > 0) {
+      unsigned long offlineDuration = radarOnlineSince - lastDisconnectTime;
+      Serial.print(F(", was offline for "));
+      Serial.print(offlineDuration);
+      Serial.print(F("ms"));
     }
-    lastRadarConnected = radarConnected;
+    Serial.println(F(")"));
+    lastRadarStable = true;
+  } else if (sustainedOffline && lastRadarStable) {
+    // Just went offline for sustained period
+    radarOfflineSince = millis();
+    lastDisconnectTime = millis();
+    sensorStabilizing = false;
+    Serial.print(millis());
+    Serial.println(F(" RADAR OFFLINE"));
+    lastRadarStable = false;
   }
 
   if (abs(potValue - stablePotValue) > 2) {
@@ -225,21 +238,22 @@ void loop() {
   }
 
   // State machine: freeze state when sensor is offline, resume normal after stabilization
-  if (!radarConnected) {
-    // Sensor offline: freeze effectivePresence and all state
-    // Only invalidate incomplete detection — preserve absence/countdown tracking
+  if (!lastRadarStable) {
+    // Sensor offline (sustained): freeze effectivePresence and all state
     pendingPresenceDetected = false;
     // effectivePresence, pendingPresenceLost, countdownActive, countdownCompleted all stay as-is
   } else if (sensorStabilizing) {
     // Sensor just came online: wait for stabilization period before trusting data
     if (millis() - radarOnlineSince >= SENSOR_STABILIZE_MS) {
       sensorStabilizing = false;
-      // Resume normal state machine with preserved state — don't force-set anything
+      // Resume normal state machine with preserved state
     }
-    // During stabilization, keep effectivePresence frozen
   } else {
     // Normal operation: sensor online and stabilized
+    bool sensorBrieflyOffline = sensorOfflineStart > 0 && (millis() - sensorOfflineStart < SENSOR_FLAP_FILTER_MS);
+
     if (radarPresence) {
+      // Presence confirmed: reset absence tracking, start presence debounce
       pendingPresenceLost = false;
       countdownActive = false;
       countdownStart = 0;
@@ -253,7 +267,11 @@ void loop() {
           effectivePresence = true;
         }
       }
+    } else if (sensorBrieflyOffline) {
+      // Sensor in a brief disconnect flap: keep all state as-is
+      // Don't reset debounce timers, don't start countdown
     } else {
+      // No presence and sensor not flapping: treat as genuine absence
       pendingPresenceDetected = false;
 
       if (!pendingPresenceLost) {
