@@ -30,11 +30,20 @@ static unsigned long countdownStart = 0;
 static bool pendingPresenceLost = false;
 static bool countdownActive = false;
 static bool countdownCompleted = false;
-static bool effectivePresence = true;
+static bool effectivePresence = false;
 static bool pendingPresenceDetected = false;
 static unsigned long pendingDetectSince = 0;
 static bool lastRadarConnected = false;
 static unsigned long radarOfflineSince = 0;
+static unsigned long radarOnlineSince = 0;
+static bool sensorStabilizing = false;
+static unsigned int disconnectCount = 0;
+static unsigned long lastDisconnectTime = 0;
+
+// Sensor offline grace period: freeze state for this duration before failing safe
+static constexpr unsigned long SENSOR_OFFLINE_GRACE_MS = 2000;
+// Sensor reconnect stabilization: wait this long before trusting presence data
+static constexpr unsigned long SENSOR_STABILIZE_MS = 500;
 
 Mode getMode() {
   return currentMode;
@@ -141,7 +150,11 @@ static void printStatus(int potValue, bool radarPresence, bool radarConnected, b
     Serial.print(F("-"));
   }
   Serial.print(F(" Fade: "));
-  Serial.println(fading ? F("Y") : F("N"));
+  Serial.print(fading ? F("Y") : F("N"));
+  Serial.print(F(" Stab: "));
+  Serial.print(sensorStabilizing ? F("Y") : F("N"));
+  Serial.print(F(" Disc: "));
+  Serial.println(disconnectCount);
 }
 
 bool getEffectivePresence() { return effectivePresence; }
@@ -150,6 +163,9 @@ unsigned long getCountdownRemaining() {
   if (!countdownActive) return 0;
   return PRESENCE_COUNTDOWN_MS - (millis() - countdownStart);
 }
+unsigned int getDisconnectCount() { return disconnectCount; }
+unsigned long getLastDisconnectTime() { return lastDisconnectTime; }
+bool isSensorStabilizing() { return sensorStabilizing; }
 
 void setup() {
   Serial.begin(115200);
@@ -174,12 +190,27 @@ void loop() {
   bool radarPresence = radarPresenceDetected();
   bool radarConnected = radarIsConnected();
 
+  // Track sensor connect/disconnect events
   if (radarConnected != lastRadarConnected) {
     if (radarConnected) {
+      radarOnlineSince = millis();
+      sensorStabilizing = true;
+      disconnectCount++;
       Serial.print(millis());
-      Serial.println(F(" RADAR ONLINE"));
+      Serial.print(F(" RADAR ONLINE ("));
+      Serial.print(F("disconnects: "));
+      Serial.print(disconnectCount);
+      if (lastDisconnectTime > 0) {
+        unsigned long offlineDuration = radarOnlineSince - lastDisconnectTime;
+        Serial.print(F(", was offline for "));
+        Serial.print(offlineDuration);
+        Serial.print(F("ms"));
+      }
+      Serial.println(F(")"));
     } else {
       radarOfflineSince = millis();
+      lastDisconnectTime = millis();
+      sensorStabilizing = false;
       Serial.print(millis());
       Serial.println(F(" RADAR OFFLINE"));
     }
@@ -190,44 +221,59 @@ void loop() {
     stablePotValue = potValue;
   }
 
-  // Software debounce + countdown for light-off timing.
-  if (radarPresence) {
-    pendingPresenceLost = false;
-    countdownActive = false;
-    countdownStart = 0;
-    countdownCompleted = false;
-
-    if (!effectivePresence) {
-      if (!pendingPresenceDetected) {
-        pendingPresenceDetected = true;
-        pendingDetectSince = millis();
-      } else if (millis() - pendingDetectSince >= PRESENCE_DEBOUNCE_MS) {
-        effectivePresence = true;
-      }
-    }
-  } else {
+  // State machine: freeze state when sensor is offline, resume normal after stabilization
+  if (!radarConnected) {
+    // Sensor offline: freeze effectivePresence and all state
+    // Only invalidate incomplete detection — preserve absence/countdown tracking
     pendingPresenceDetected = false;
-
-    if (!pendingPresenceLost) {
-      pendingPresenceLost = true;
-      pendingSince = millis();
+    // effectivePresence, pendingPresenceLost, countdownActive, countdownCompleted all stay as-is
+  } else if (sensorStabilizing) {
+    // Sensor just came online: wait for stabilization period before trusting data
+    if (millis() - radarOnlineSince >= SENSOR_STABILIZE_MS) {
+      sensorStabilizing = false;
+      // Resume normal state machine with preserved state — don't force-set anything
+    }
+    // During stabilization, keep effectivePresence frozen
+  } else {
+    // Normal operation: sensor online and stabilized
+    if (radarPresence) {
+      pendingPresenceLost = false;
+      countdownActive = false;
+      countdownStart = 0;
       countdownCompleted = false;
-      effectivePresence = true;
-    } else if (millis() - pendingSince >= PRESENCE_DEBOUNCE_MS) {
-      if (!countdownActive && !countdownCompleted) {
-        countdownActive = true;
-        countdownStart = millis();
+
+      if (!effectivePresence) {
+        if (!pendingPresenceDetected) {
+          pendingPresenceDetected = true;
+          pendingDetectSince = millis();
+        } else if (millis() - pendingDetectSince >= PRESENCE_DEBOUNCE_MS) {
+          effectivePresence = true;
+        }
       }
-      unsigned long elapsed = millis() - countdownStart;
-      if (elapsed >= PRESENCE_COUNTDOWN_MS) {
-        effectivePresence = false;
-        countdownActive = false;
-        countdownCompleted = true;
+    } else {
+      pendingPresenceDetected = false;
+
+      if (!pendingPresenceLost) {
+        pendingPresenceLost = true;
+        pendingSince = millis();
+        countdownCompleted = false;
+        effectivePresence = true;
+      } else if (millis() - pendingSince >= PRESENCE_DEBOUNCE_MS) {
+        if (!countdownActive && !countdownCompleted) {
+          countdownActive = true;
+          countdownStart = millis();
+        }
+        unsigned long elapsed = millis() - countdownStart;
+        if (elapsed >= PRESENCE_COUNTDOWN_MS) {
+          effectivePresence = false;
+          countdownActive = false;
+          countdownCompleted = true;
+        } else {
+          effectivePresence = true;
+        }
       } else {
         effectivePresence = true;
       }
-    } else {
-      effectivePresence = true;
     }
   }
 

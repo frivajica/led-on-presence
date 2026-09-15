@@ -35,7 +35,9 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="row"><span class="label">Distance</span><span id="dist">-</span></div>
   <div class="row"><span class="label">Light</span><span id="light">-</span></div>
   <div class="row"><span class="label">Brightness</span><span id="bright">-</span></div>
-  <div class="row"><span class="label">Pot</span><span id="pot">-</span></div>
+    <div class="row"><span class="label">Pot</span><span id="pot">-</span></div>
+    <div class="row"><span class="label">Disconnects</span><span id="disc">-</span></div>
+    <div class="row"><span class="label">Stabilizing</span><span id="stab">-</span></div>
   <script>
     function update() {
       fetch('/api/status').then(r => r.json()).then(d => {
@@ -55,6 +57,8 @@ static const char PAGE_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('light').className = d.lightOn ? 'on' : 'off';
         document.getElementById('bright').textContent = d.brightness + ' / 255';
         document.getElementById('pot').textContent = d.potValue;
+        document.getElementById('disc').textContent = d.disconnectCount;
+        document.getElementById('stab').textContent = d.sensorStabilizing ? 'YES' : 'NO';
       });
     }
     update();
@@ -84,6 +88,9 @@ void webServerSetup() {
     doc["lightOn"] = isLightOn();
     doc["brightness"] = getCurrentBrightness();
     doc["potValue"] = getPotValue();
+    doc["disconnectCount"] = getDisconnectCount();
+    doc["lastDisconnectTime"] = getLastDisconnectTime();
+    doc["sensorStabilizing"] = isSensorStabilizing();
     char buf[256];
     serializeJson(doc, buf, sizeof(buf));
     req->send(200, "application/json", buf);

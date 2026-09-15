@@ -36,5 +36,8 @@ Mode getMode();
 bool getEffectivePresence();
 bool getCountdownActive();
 unsigned long getCountdownRemaining();
+unsigned int getDisconnectCount();
+unsigned long getLastDisconnectTime();
+bool isSensorStabilizing();
 
 #endif
